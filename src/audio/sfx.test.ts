@@ -4,6 +4,9 @@ import { createSfx, type SfxKind } from './sfx';
 /** 生成されたノード数と stop 呼び出しを数える偽 AudioContext。 */
 function fakeAudio() {
   const stats = { contexts: 0, nodes: 0, stops: 0, resumes: 0 };
+  /** つないだ順の記録（[元, 先]）。 */
+  const links: [unknown, unknown][] = [];
+  const destination = {};
   /** 作られた順のノード。最初の 1 つが全体音量。 */
   const created: { gain: { value: number } }[] = [];
   const param = () => ({
@@ -12,9 +15,10 @@ function fakeAudio() {
     linearRampToValueAtTime: () => undefined,
     exponentialRampToValueAtTime: () => undefined,
   });
-  const node = () => {
+  const node = (kind = 'node') => {
     stats.nodes++;
     const made = {
+      kind,
       type: 'sine',
       loop: false,
       buffer: null,
@@ -23,7 +27,10 @@ function fakeAudio() {
       gain: param(),
       Q: param(),
       playbackRate: param(),
-      connect: () => undefined,
+      connect: (to: unknown) => void links.push([made, to]),
+      threshold: param(),
+      ratio: param(),
+      delayTime: param(),
       disconnect: () => undefined,
       start: () => undefined,
       stop: () => void stats.stops++,
@@ -31,27 +38,46 @@ function fakeAudio() {
     created.push(made);
     return made;
   };
-  const createContext = () => {
+  const createContext = (modern = true) => {
     stats.contexts++;
     return {
       currentTime: 0,
       sampleRate: 8000,
       state: 'running',
-      destination: {},
+      destination,
+      ...(modern
+        ? {
+            createDynamicsCompressor: () => node('compressor'),
+            createDelay: () => node('delay'),
+          }
+        : {}),
       resume: () => {
         stats.resumes++;
         return Promise.resolve();
       },
-      createOscillator: node,
-      createGain: node,
-      createBufferSource: node,
-      createBiquadFilter: node,
+      createOscillator: () => node('osc'),
+      createGain: () => node('gain'),
+      createBufferSource: () => node('source'),
+      createBiquadFilter: () => node('filter'),
       createBuffer: (_channels: number, length: number) => ({
         getChannelData: () => new Float32Array(length),
       }),
     } as unknown as AudioContext;
   };
-  return { stats, createContext, created };
+  /** from から先へたどって to に着けるか。 */
+  const reaches = (from: unknown, to: unknown): boolean => {
+    const seen = new Set<unknown>();
+    const queue = [from];
+    while (queue.length > 0) {
+      const at = queue.pop();
+      if (at === to) return true;
+      if (seen.has(at)) continue;
+      seen.add(at);
+      for (const [a, b] of links) if (a === at) queue.push(b);
+    }
+    return false;
+  };
+  return { stats, createContext, created, links, destination, reaches };
 }
 
 const KINDS: SfxKind[] = [
@@ -168,5 +194,31 @@ describe('createSfx', () => {
     const sfx = createSfx(createContext, true);
     sfx.unlock();
     expect(created[0]!.gain.value).toBe(0);
+  });
+  it('音割れ防止のコンプレッサーと、響きを足すエコーを通して鳴らす', () => {
+    const { createContext, created, links, destination, reaches } = fakeAudio();
+    const sfx = createSfx(() => createContext(), false);
+    sfx.unlock();
+    const kinds = (created as unknown as { kind: string }[]).map((n) => n.kind);
+    expect(kinds).toContain('compressor');
+    expect(kinds).toContain('delay');
+    const before = links.length;
+    sfx.play('go');
+    // 鳴らした音は、全体音量（最初のノード）を通って出口に着く
+    const master = created[0]!;
+    const sources = links.slice(before).map(([from]) => from);
+    expect(sources.length).toBeGreaterThan(0);
+    for (const source of sources) expect(reaches(source, master)).toBe(true);
+    expect(reaches(master, destination)).toBe(true);
+    // 出口へは全体音量からしかつながない（ミュートで響きの残りも消える）
+    expect(links.filter(([, to]) => to === destination).map(([from]) => from)).toEqual([master]);
+  });
+  it('コンプレッサーやディレイが無い環境でも鳴らせる', () => {
+    const { stats, createContext } = fakeAudio();
+    const sfx = createSfx(() => createContext(false), false);
+    sfx.unlock();
+    const before = stats.nodes;
+    for (const kind of KINDS) sfx.play(kind);
+    expect(stats.nodes).toBeGreaterThan(before);
   });
 });

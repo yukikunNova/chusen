@@ -166,6 +166,57 @@ const BUILDERS: Record<VehicleKind, Build> = {
     return { model: b.model, flame: addFlame(b, palette, 0.75, 0.8), tail: 1.4 };
   },
 
+  comet(body, palette, keep) {
+    const b = builder(keep);
+    // 氷の核と、後ろへ伸びる尾
+    b.add(new THREE.IcosahedronGeometry(0.95, 1), body, 0, 0, 0.5);
+    b.add(new THREE.IcosahedronGeometry(0.45, 0), palette.white, 0.55, 0.45, 0.9);
+    b.add(new THREE.ConeGeometry(0.85, 2.6, 16, 1, true), palette.glass, 0, 0, -1.1).rotation.x =
+      -Math.PI / 2;
+    b.add(new THREE.SphereGeometry(0.16, 8, 6), palette.lamp, -0.5, 0.3, 1.2);
+    return { model: b.model, flame: addFlame(b, palette, 2.2, 0.9), tail: 2.6 };
+  },
+
+  saturn(body, palette, keep) {
+    const b = builder(keep);
+    b.add(new THREE.SphereGeometry(1.0, 24, 16), body);
+    // 輪は少し傾ける
+    const ring = b.add(new THREE.TorusGeometry(1.75, 0.2, 6, 40), palette.cardboard);
+    ring.scale.z = 0.25;
+    ring.rotation.x = Math.PI / 2 - 0.35;
+    const inner = b.add(new THREE.TorusGeometry(1.35, 0.1, 6, 40), palette.lamp);
+    inner.scale.z = 0.25;
+    inner.rotation.x = Math.PI / 2 - 0.35;
+    return { model: b.model, flame: addFlame(b, palette, 0.9), tail: 1.6 };
+  },
+
+  rover(body, palette, keep) {
+    const b = builder(keep);
+    b.add(new THREE.BoxGeometry(1.5, 0.5, 2.3), body, 0, 0.1, 0);
+    for (const side of [-1, 1]) {
+      for (const z of [-0.85, 0, 0.85]) {
+        b.add(
+          new THREE.CylinderGeometry(0.42, 0.42, 0.3, 14),
+          palette.dark,
+          side * 0.95,
+          -0.4,
+          z,
+        ).rotation.z = Math.PI / 2;
+      }
+    }
+    b.add(new THREE.BoxGeometry(1.3, 0.06, 1.0), palette.panel, 0, 0.42, -0.5);
+    b.add(new THREE.CylinderGeometry(0.04, 0.04, 0.9, 6), palette.white, 0.35, 0.85, 0.6);
+    b.add(new THREE.BoxGeometry(0.45, 0.28, 0.3), palette.glass, 0.35, 1.35, 0.65);
+    b.add(
+      new THREE.ConeGeometry(0.4, 0.3, 16, 1, true),
+      palette.white,
+      -0.4,
+      0.75,
+      0.7,
+    ).rotation.x = Math.PI;
+    return { model: b.model, flame: addFlame(b, palette, 1.15, 0.9), tail: 1.9 };
+  },
+
   // ここから会議室の物
   chair(body, palette, keep) {
     const b = builder(keep);
@@ -246,6 +297,97 @@ const BUILDERS: Record<VehicleKind, Build> = {
     b.add(new THREE.BoxGeometry(0.2, 0.06, 0.2), palette.lamp, 0.6, 0.14, 1.36);
     b.model.rotation.z = 0.25;
     return { model: b.model, flame: addFlame(b, palette, 1.5), tail: 2.2 };
+  },
+
+  laptop(body, palette, keep) {
+    const b = builder(keep);
+    b.add(new THREE.BoxGeometry(2.2, 0.14, 1.5), palette.dark, 0, -0.3, 0.2);
+    b.add(new THREE.BoxGeometry(1.9, 0.03, 0.8), palette.white, 0, -0.22, 0.4);
+    // 開いた画面。天板（背面）は機体の色
+    const lid = new THREE.Group();
+    lid.position.set(0, -0.25, -0.55);
+    lid.rotation.x = -0.3;
+    const cover = new THREE.Mesh(keep(new THREE.BoxGeometry(2.2, 1.45, 0.1)), body);
+    cover.position.y = 0.72;
+    const screen = new THREE.Mesh(keep(new THREE.BoxGeometry(1.95, 1.2, 0.02)), palette.glass);
+    screen.position.set(0, 0.72, 0.06);
+    lid.add(cover, screen);
+    b.model.add(lid);
+    return { model: b.model, flame: addFlame(b, palette, 0.9), tail: 1.6 };
+  },
+
+  // ここからネタ枠
+  duck(body, palette, keep) {
+    const b = builder(keep);
+    const torso = b.add(new THREE.SphereGeometry(1.0, 20, 14), body, 0, -0.15, -0.1);
+    torso.scale.set(0.95, 0.8, 1.25);
+    b.add(new THREE.SphereGeometry(0.6, 18, 12), body, 0, 0.75, 0.75);
+    const beak = b.add(new THREE.ConeGeometry(0.26, 0.5, 12), palette.lamp, 0, 0.68, 1.45);
+    beak.rotation.x = Math.PI / 2;
+    beak.scale.z = 0.55;
+    for (const side of [-1, 1]) {
+      b.add(new THREE.SphereGeometry(0.09, 8, 6), palette.dark, side * 0.3, 0.95, 1.2);
+      const wing = b.add(new THREE.SphereGeometry(0.5, 12, 8), body, side * 0.85, -0.05, -0.2);
+      wing.scale.set(0.3, 0.6, 1.1);
+    }
+    const tail = b.add(new THREE.ConeGeometry(0.3, 0.6, 10), body, 0, 0.35, -1.25);
+    tail.rotation.x = -0.9;
+    return { model: b.model, flame: addFlame(b, palette, 1.2, 0.9), tail: 1.9 };
+  },
+
+  sushi(body, palette, keep) {
+    const b = builder(keep);
+    const rice = b.add(new THREE.CapsuleGeometry(0.62, 1.5, 6, 14), palette.white, 0, -0.2, 0);
+    rice.rotation.x = Math.PI / 2;
+    rice.scale.z = 0.8;
+    // ネタは機体の色
+    const topping = b.add(new THREE.BoxGeometry(1.25, 0.34, 3.0), body, 0, 0.4, 0);
+    topping.rotation.x = -0.04;
+    b.add(new THREE.BoxGeometry(1.36, 1.2, 0.5), palette.dark, 0, 0, -0.1);
+    return { model: b.model, flame: addFlame(b, palette, 1.5), tail: 2.2 };
+  },
+
+  donut(body, palette, keep) {
+    const b = builder(keep);
+    b.add(new THREE.TorusGeometry(0.95, 0.5, 14, 30), palette.cardboard);
+    // 糖衣は機体の色
+    const icing = b.add(new THREE.TorusGeometry(0.95, 0.42, 12, 30), body, 0, 0, 0.16);
+    icing.scale.z = 0.75;
+    for (let k = 0; k < 12; k++) {
+      const a = (k / 12) * Math.PI * 2;
+      const r = 0.8 + (k % 3) * 0.14;
+      const sprinkle = b.add(
+        new THREE.BoxGeometry(0.2, 0.07, 0.07),
+        k % 2 === 0 ? palette.white : palette.lamp,
+        Math.cos(a) * r,
+        Math.sin(a) * r,
+        0.5,
+      );
+      sprinkle.rotation.z = a * 2.3;
+    }
+    return { model: b.model, flame: addFlame(b, palette, 0.5, 0.9), tail: 1.2 };
+  },
+
+  toilet(body, palette, keep) {
+    const b = builder(keep);
+    const bowl = b.add(
+      new THREE.CylinderGeometry(0.85, 0.5, 0.9, 20),
+      palette.white,
+      0,
+      -0.25,
+      0.4,
+    );
+    bowl.scale.z = 1.3;
+    // 便座とふたは機体の色
+    const seat = b.add(new THREE.TorusGeometry(0.7, 0.14, 8, 24), body, 0, 0.24, 0.4);
+    seat.rotation.x = Math.PI / 2;
+    seat.scale.y = 1.3;
+    const lid = b.add(new THREE.CylinderGeometry(0.8, 0.8, 0.1, 20), body, 0, 0.95, -0.55);
+    lid.rotation.x = Math.PI / 2 - 0.15;
+    b.add(new THREE.BoxGeometry(1.5, 1.3, 0.6), palette.white, 0, 0.4, -1.0);
+    b.add(new THREE.BoxGeometry(0.3, 0.08, 0.12), palette.lamp, 0.55, 0.8, -0.66);
+    b.add(new THREE.CylinderGeometry(0.4, 0.55, 0.5, 16), palette.white, 0, -0.9, 0.2);
+    return { model: b.model, flame: addFlame(b, palette, 1.3), tail: 2.0 };
   },
 };
 

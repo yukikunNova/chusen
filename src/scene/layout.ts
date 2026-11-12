@@ -38,16 +38,24 @@ export function nameTagText(name: string): string {
   return chars.length <= NAME_TAG_MAX ? name : `${chars.slice(0, NAME_TAG_MAX).join('')}…`;
 }
 
-/** 乗り物の種類。前半は宇宙もの、後半は会議室にある物。 */
+/** 乗り物の種類。宇宙もの、会議室にある物、ネタ枠の順。 */
 export const VEHICLE_KINDS = [
   'rocket',
   'ufo',
   'shuttle',
   'satellite',
+  'comet',
+  'saturn',
+  'rover',
   'chair',
   'box',
   'cup',
   'keyboard',
+  'laptop',
+  'duck',
+  'sushi',
+  'donut',
+  'toilet',
 ] as const;
 export type VehicleKind = (typeof VEHICLE_KINDS)[number];
 
