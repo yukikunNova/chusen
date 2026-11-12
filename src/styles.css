@@ -1,0 +1,36 @@
+:root {
+  color-scheme: dark;
+  --bg: #05030f;
+  --fg: #f4f1ff;
+  --accent: #ff2e93;
+  --accent2: #29e0ff;
+  --gold: #ffd60a;
+  font-family:
+    'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Yu Gothic', 'Meiryo', system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+#stage {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+#app {
+  position: fixed;
+  inset: 0;
+}
