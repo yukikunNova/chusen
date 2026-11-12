@@ -5,7 +5,14 @@
 
 export type Vec3 = { x: number; y: number; z: number };
 /** コース上のある地点の位置と向き。right は進行方向に向かって右。 */
-export type CourseFrame = { pos: Vec3; tangent: Vec3; right: Vec3; up: Vec3 };
+export type CourseFrame = {
+  pos: Vec3;
+  tangent: Vec3;
+  right: Vec3;
+  up: Vec3;
+  /** ロール（きりもみの回転）を含まない上向き。カメラを回したくないときに使う。 */
+  levelUp: Vec3;
+};
 
 export const THEME_IDS = ['neon', 'lava', 'ice', 'candy', 'aurora'] as const;
 export type ThemeId = (typeof THEME_IDS)[number];
@@ -241,6 +248,7 @@ export function generateCourse(rand: Rand): Course {
       return {
         pos: positionAt(s),
         tangent,
+        levelUp: up0,
         right: {
           x: right0.x * c + up0.x * d,
           y: right0.y * c + up0.y * d,
