@@ -51,10 +51,9 @@ const MAX_FINISH_GAP = 0.6;
 const KEY_TIMES = [3, 5, 7, 9, 11, 13, 15, 17, 19] as const;
 /** 終盤にもう一度順位を揺らす節目。 */
 const LATE_KEY_TIME = 21;
-/** ごぼう抜きに使う時間と、起こしてよい時間帯。 */
+/** ごぼう抜きに使う時間と、始めてよい最も遅い時刻（中盤イベントの最初の枠は必ずこれ以前に来る）。 */
 export const SURGE_DURATION = 2;
-const SURGE_FROM = 7;
-const SURGE_TO = 13;
+const SURGE_LATEST = 12.6;
 const SURGE_MIN_RACERS = 4;
 const SURGE_PASSED = 3;
 const MID_KINDS = ['boost', 'spin', 'weave', 'stall', 'overtake', 'attack'] as const;
@@ -98,7 +97,21 @@ function buildEvents(n: number, rand: Rand): RaceEvent[] {
   let pool: number[] = [];
   // 攻撃は相手が要る。2 人以上なら毎レース最低 1 回は起こす
   const canAttack = n >= 2;
-  const forcedAttack = canAttack ? randInt(rand, count) : -1;
+  const times = offsets.map((offset, i) => MID_START + i * MID_GAP + offset);
+  // ごぼう抜きにする枠。遅すぎると抜く余地がなくなるので、SURGE_LATEST までで最も遅い枠にする
+  const surgeSlot =
+    n >= SURGE_MIN_RACERS
+      ? Math.max(
+          0,
+          times.findLastIndex((t) => t <= SURGE_LATEST),
+        )
+      : -1;
+  // 攻撃を必ず入れる枠は、ごぼう抜きの枠を避ける
+  let forcedAttack = -1;
+  if (canAttack) {
+    forcedAttack = randInt(rand, surgeSlot < 0 ? count : count - 1);
+    if (surgeSlot >= 0 && forcedAttack >= surgeSlot) forcedAttack++;
+  }
   for (let i = 0; i < count; i++) {
     if (pool.length === 0) {
       pool = shuffled(
@@ -106,10 +119,11 @@ function buildEvents(n: number, rand: Rand): RaceEvent[] {
         rand,
       );
     }
-    const t = MID_START + i * MID_GAP + offsets[i]!;
+    const t = times[i]!;
     const racer = pool.pop()!;
     let kind: RaceEventKind = MID_KINDS[randInt(rand, MID_KINDS.length)]!;
-    if (i === forcedAttack) kind = 'attack';
+    if (i === surgeSlot) kind = 'surge';
+    else if (i === forcedAttack) kind = 'attack';
     else if (kind === 'attack' && !canAttack) kind = 'spin';
     if (kind === 'attack') {
       // 被弾者以外から攻撃者を選ぶ
@@ -119,18 +133,6 @@ function buildEvents(n: number, rand: Rand): RaceEvent[] {
     } else {
       events.push({ t, kind, racer });
     }
-  }
-
-  // 攻撃以外の中盤イベントを 1 つ、ごぼう抜きに差し替える（時間帯の中央に近いものを選ぶ）
-  if (n >= SURGE_MIN_RACERS) {
-    const center = (SURGE_FROM + SURGE_TO) / 2;
-    const candidates = events.filter((e, i) => i > 0 && e.kind !== 'attack');
-    const inWindow = candidates.filter((e) => e.t >= SURGE_FROM && e.t <= SURGE_TO);
-    const chosen = (inWindow.length > 0 ? inWindow : candidates).reduce<RaceEvent | null>(
-      (best, e) => (!best || Math.abs(e.t - center) < Math.abs(best.t - center) ? e : best),
-      null,
-    );
-    if (chosen) chosen.kind = 'surge';
   }
 
   if (n >= 3) events.push({ t: COMEBACK_TIME, kind: 'finalComeback', racer: 0 });

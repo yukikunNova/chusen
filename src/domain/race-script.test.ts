@@ -125,8 +125,8 @@ describe('buildRaceScript', () => {
   });
   it('4 人以上なら、最下位から 2 秒で 3 人以上を抜く「ごぼう抜き」が 1 回ある', () => {
     const bad: string[] = [];
-    for (const n of [4, 5, 8, 15, 20]) {
-      for (const seed of SEEDS) {
+    for (const n of [4, 5, 6, 7, 8, 10, 15, 20]) {
+      for (let seed = 1; seed <= 300; seed++) {
         const s = build(n, seed);
         const surges = s.events.filter((e) => e.kind === 'surge');
         if (surges.length !== 1) {
