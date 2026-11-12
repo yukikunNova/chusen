@@ -655,3 +655,64 @@ button:disabled {
     animation: none;
   }
 }
+
+/* 簡易演出（3D が使えない環境） */
+.reveal-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2vh;
+  padding: 4vh 4vw;
+}
+
+.reveal-title {
+  margin: 0;
+  font-size: clamp(20px, 3.4vh, 40px);
+  color: var(--accent, #ffd60a);
+}
+
+.reveal-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(10, auto);
+  gap: 0.6vh 5vw;
+}
+
+.reveal-row {
+  display: flex;
+  align-items: baseline;
+  gap: 1.2vw;
+  font-size: clamp(18px, 4.2vh, 44px);
+  font-weight: 800;
+  opacity: 0;
+  transform: translateY(12px) scale(0.96);
+  transition:
+    opacity 0.25s ease,
+    transform 0.25s ease;
+}
+
+.reveal-row.shown {
+  opacity: 1;
+  transform: none;
+}
+
+.reveal-rank {
+  min-width: 2ch;
+  text-align: right;
+  color: #29e0ff;
+}
+
+.reveal-row:first-child.shown {
+  color: #ffd60a;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal-row {
+    transform: none;
+    transition: opacity 0.2s ease;
+  }
+}

@@ -11,6 +11,7 @@ import { createSpace } from './scene/space';
 import { createStage, isWebGLAvailable, type Stage } from './scene/stage';
 import { createTrack } from './scene/track';
 import { mountHud, type Hud } from './ui/hud';
+import { runSimpleReveal } from './ui/simple-reveal';
 import { getBrowserStorage, loadStore } from './storage/store';
 
 const root = document.querySelector<HTMLElement>('#app');
@@ -38,7 +39,16 @@ function download(filename: string, text: string) {
 }
 
 const canvas = document.querySelector<HTMLCanvasElement>('#stage');
-const stage: Stage | null = canvas && isWebGLAvailable() ? createStage(canvas) : null;
+/** 3D が使えるときだけ舞台を作る。作れなければ簡易表示で動かす。 */
+function tryCreateStage(): Stage | null {
+  if (!canvas || !isWebGLAvailable()) return null;
+  try {
+    return createStage(canvas);
+  } catch {
+    return null;
+  }
+}
+const stage = tryCreateStage();
 if (stage) {
   createSpace(stage);
   createTrack(stage);
@@ -97,8 +107,14 @@ const runRace: RaceRunner = (order, onDone) => {
   // 「抽選スタート」のクリック内で呼ばれるので、ここで音を使えるようにする
   sfx.unlock();
   if (!stage) {
-    onDone();
-    return { skip: () => undefined };
+    return runSimpleReveal(
+      root,
+      order.map((m) => m.name),
+      () => {
+        sfx.play('fanfare');
+        onDone();
+      },
+    );
   }
   // 演出用の乱数。順位は order で確定済みで、ここでは変わらない
   const seed = Date.now();
@@ -127,7 +143,7 @@ app = createApp({
   copyText,
   download,
   confirm: (message) => window.confirm(message),
-  extraNotice: null,
+  extraNotice: stage ? null : '3D表示が使えないため簡易表示で動作します',
   onScreenChange: (screen) => {
     if (screen === 'result') {
       // スキップで来た場合もここで始まる（start は二重に呼んでも 1 系統）
