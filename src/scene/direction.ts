@@ -83,3 +83,14 @@ const HOOK_GRACE = 0.5;
 export function hookDue(prevT: number, t: number, time: number): boolean {
   return prevT < time && t >= time && t - time < HOOK_GRACE;
 }
+
+/** 暫定順位を出し始める時刻（秒）。「GO!」の表示が消える頃。 */
+const RANKING_FROM = 3.8;
+
+/**
+ * 暫定順位を画面に出してよいか。
+ * スタート前は全員の進行度が 0 で同着になり、同着は添字順（＝確定済みの最終順位）に並ぶため、出すと結果が先に見えてしまう。
+ */
+export function rankingVisibleAt(t: number): boolean {
+  return t >= RANKING_FROM;
+}

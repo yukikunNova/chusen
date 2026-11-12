@@ -112,13 +112,14 @@ export function importStore(text: string): Store | null {
   }
 }
 
-/** localStorage が実際に書き込めるときだけ返す。 */
+/**
+ * localStorage を読めるときだけ返す。
+ * 書き込めるかはここでは確かめない（容量超過でも保存済みの名簿は開けるようにし、保存の失敗は saveStore が知らせる）。
+ */
 export function getBrowserStorage(): StorageLike | null {
   try {
     const storage = window.localStorage;
-    const probe = 'chusen:probe';
-    storage.setItem(probe, '1');
-    storage.removeItem(probe);
+    storage.getItem(STORAGE_KEY);
     return storage;
   } catch {
     return null;

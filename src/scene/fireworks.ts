@@ -332,6 +332,9 @@ export function createFireworks(stage: Stage, onBurst?: () => void): Fireworks {
     },
     stop() {
       running = false;
+      // 紙吹雪を次のレースへ持ち越さない
+      confettiTime = Infinity;
+      confetti.visible = false;
     },
     salvo() {
       for (let n = 0; n < SALVO; n++) launch(true);

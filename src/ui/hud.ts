@@ -16,6 +16,8 @@ export function mountHud(root: HTMLElement, handlers: HudHandlers, muted: boolea
   const countdown = el('div', { class: 'hud-countdown', testid: 'countdown', hidden: true });
   const telop = el('div', { class: 'hud-telop', testid: 'telop', hidden: true });
   const ranking = el('ol', { class: 'hud-ranking', testid: 'ranking' });
+  // 途中経過の飾り。順位が入れ替わるたびに読み上げられないようにする
+  ranking.setAttribute('aria-hidden', 'true');
   const skip = el('button', {
     class: 'btn small',
     testid: 'skip',
@@ -63,6 +65,7 @@ export function mountHud(root: HTMLElement, handlers: HudHandlers, muted: boolea
       }
     },
     setRanking(entries) {
+      // 行は位置を動かして入れ替える（DOM の順は変えない）。読み上げは結果画面の一覧に任せる
       ranking.style.setProperty('--count', String(entries.length));
       const seen = new Set<string>();
       entries.forEach((entry, i) => {

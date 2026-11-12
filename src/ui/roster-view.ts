@@ -40,6 +40,7 @@ export function mountRosterView(
   newId: NewId,
 ): RosterView {
   let store: Store | null = null;
+  let importTurn = 0;
 
   const tabs = el('div', { class: 'tabs' });
   const groupAdd = el('button', {
@@ -63,6 +64,10 @@ export function mountRosterView(
     title: 'グループを削除',
     type: 'button',
   });
+  // 記号だけのボタンは、読み上げ用の名前を title と同じ文にする
+  for (const button of [groupAdd, groupRename, groupDelete]) {
+    button.setAttribute('aria-label', button.title);
+  }
   const mute = el('button', { class: 'tool-btn', testid: 'mute', type: 'button' });
   const exportBtn = el('button', {
     class: 'tool-btn',
@@ -185,7 +190,12 @@ export function mountRosterView(
   });
 
   groupAdd.addEventListener('click', () => {
-    if (store) change(addGroup(store, `グループ${store.groups.length + 1}`, newId));
+    if (!store) return;
+    // 削除で番号が空いても、既存の名前と重ならない番号を選ぶ
+    const used = new Set(store.groups.map((g) => g.name));
+    let n = store.groups.length + 1;
+    while (used.has(`グループ${n}`)) n++;
+    change(addGroup(store, `グループ${n}`, newId));
   });
   groupRename.addEventListener('click', () => {
     const g = group();
@@ -214,9 +224,15 @@ export function mountRosterView(
       handlers.onImportFailed();
       return;
     }
+    // 続けて選んだ場合、最後に選んだファイルの結果だけを使う
+    const turn = ++importTurn;
     file.text().then(
-      (text) => handlers.onImport(text),
-      () => handlers.onImportFailed(),
+      (text) => {
+        if (turn === importTurn) handlers.onImport(text);
+      },
+      () => {
+        if (turn === importTurn) handlers.onImportFailed();
+      },
     );
   });
   allOn.addEventListener('click', () => {
@@ -251,6 +267,7 @@ export function mountRosterView(
       title: '削除',
       type: 'button',
     });
+    del.setAttribute('aria-label', `${member.name} を削除`);
     del.addEventListener('click', () => {
       if (store) change(removeMember(store, g.id, member.id));
     });

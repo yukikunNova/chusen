@@ -1,9 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { addMembers, createInitialStore, type Store } from '../domain/roster';
 import {
   BROKEN_KEY,
   STORAGE_KEY,
   exportStore,
+  getBrowserStorage,
   importStore,
   loadStore,
   parseStore,
@@ -212,5 +213,28 @@ describe('parseStore', () => {
   it('オブジェクトでなければ null', () => {
     expect(parseStore(null)).toBeNull();
     expect(parseStore('x')).toBeNull();
+  });
+});
+
+describe('getBrowserStorage', () => {
+  it('書き込めなくても読めるなら返す（容量超過でも保存済みの名簿を開ける）', () => {
+    const spy = vi.spyOn(window.localStorage, 'setItem').mockImplementation(() => {
+      throw new Error('QuotaExceededError');
+    });
+    try {
+      expect(getBrowserStorage()).toBe(window.localStorage);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+  it('読み取りが例外を投げるなら null', () => {
+    const spy = vi.spyOn(window.localStorage, 'getItem').mockImplementation(() => {
+      throw new Error('SecurityError');
+    });
+    try {
+      expect(getBrowserStorage()).toBeNull();
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

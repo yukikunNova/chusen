@@ -393,7 +393,8 @@ button:disabled {
 /* ---------- 結果画面 ---------- */
 
 .result-screen {
-  justify-content: center;
+  /* 収まらないときは先頭からスクロールできるよう、はみ出す場合は上寄せにする */
+  justify-content: safe center;
   gap: clamp(8px, 2vh, 24px);
 }
 

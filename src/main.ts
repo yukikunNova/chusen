@@ -81,19 +81,24 @@ const fireworks = stage
 let app: App | null = null;
 let hud: Hud | null = null;
 let muted = false;
+/** レース中で BGM を鳴らすべき区間か（ミュート解除時に鳴らし直すため）。 */
+let bgmWanted = false;
 const hooks: RaceHooks = {
   onCount: () => sfx.play('count'),
   onGo: () => {
     sfx.play('go');
+    bgmWanted = true;
     sfx.startBgm();
   },
   onEvent: (event) => sfx.play(EVENT_SOUND[event.kind]),
   onEnd: (skipped) => {
+    bgmWanted = false;
     sfx.stopBgm();
     // スキップ時は 1 着ゴールを通らないので、ここで鳴らす
     if (skipped) sfx.play('fanfare');
   },
   onFirstFinish: () => {
+    bgmWanted = false;
     sfx.stopBgm();
     sfx.play('goal');
     sfx.play('fanfare');
@@ -157,6 +162,7 @@ app = createApp({
   onMutedChange: (value) => {
     muted = value;
     sfx.setMuted(value);
+    if (!value && bgmWanted) sfx.startBgm();
     hud?.setMuted(value);
   },
 });

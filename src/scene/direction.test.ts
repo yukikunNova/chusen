@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import type { RaceScript } from '../domain/race-script';
-import { ATTACK_FLIGHT, activeCue, attackFlight, eventFx, hookDue, shotAt } from './direction';
+import {
+  ATTACK_FLIGHT,
+  activeCue,
+  attackFlight,
+  eventFx,
+  hookDue,
+  rankingVisibleAt,
+  shotAt,
+} from './direction';
 
 describe('activeCue', () => {
   const cues = [
@@ -112,5 +120,15 @@ describe('hookDue', () => {
   });
   it('開始フレーム（前回 -1）でも時刻 0 のフックは出る', () => {
     expect(hookDue(-1, 0.016, 0)).toBe(true);
+  });
+});
+
+describe('rankingVisibleAt', () => {
+  it('スタート直後まで暫定順位を出さない（全員同着のあいだは添字順＝最終順位が見えてしまう）', () => {
+    expect(rankingVisibleAt(0)).toBe(false);
+    expect(rankingVisibleAt(3)).toBe(false);
+    expect(rankingVisibleAt(3.79)).toBe(false);
+    expect(rankingVisibleAt(3.8)).toBe(true);
+    expect(rankingVisibleAt(26)).toBe(true);
   });
 });

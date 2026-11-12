@@ -71,4 +71,11 @@ describe('mountResultView', () => {
     view.setMuted(true);
     expect(mute.textContent).toBe('🔇 音オフ');
   });
+  it('手動コピー用の欄に読み上げ用の名前が付く', () => {
+    const root = document.createElement('div');
+    mountResultView(root, names(2), handlers(), false);
+    expect(root.querySelector('[data-testid=copy-fallback]')?.getAttribute('aria-label')).toBe(
+      '抽選結果（手動コピー用）',
+    );
+  });
 });

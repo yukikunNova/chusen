@@ -9,7 +9,15 @@ import {
 } from '../domain/race-script';
 import type { Hud } from '../ui/hud';
 import { createAttacks } from './attacks';
-import { activeCue, attackFlight, eventFx, hookDue, shotAt, type Shot } from './direction';
+import {
+  activeCue,
+  attackFlight,
+  eventFx,
+  hookDue,
+  rankingVisibleAt,
+  shotAt,
+  type Shot,
+} from './direction';
 import { laneOffset } from './layout';
 import { createRaceClock } from './race-clock';
 import { createRockets } from './rockets';
@@ -274,7 +282,7 @@ export function playRace(
     const t = clock.elapsed();
     fireHooks(t);
     hud.setCountdown(countdownText(t));
-    if (t - rankingAt_ >= RANKING_INTERVAL) {
+    if (rankingVisibleAt(t) && t - rankingAt_ >= RANKING_INTERVAL) {
       rankingAt_ = t;
       hud.setRanking(rankingAt(script, t).map((i) => script.racers[i]!));
     }

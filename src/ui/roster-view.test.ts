@@ -1,5 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
-import { addMembers, createInitialStore, setMemberActive, type Store } from '../domain/roster';
+import {
+  addGroup,
+  addMembers,
+  createInitialStore,
+  removeGroup,
+  setMemberActive,
+  type Store,
+} from '../domain/roster';
 import { mountRosterView, type RosterViewHandlers } from './roster-view';
 
 function ids(prefix = 'id') {
@@ -218,5 +225,40 @@ describe('mountRosterView', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(handlers.onImportFailed).toHaveBeenCalledTimes(1);
     expect(handlers.onImport).not.toHaveBeenCalled();
+  });
+  it('自動で付けるグループ名は既存の名前と重ならない', () => {
+    const newId = ids();
+    let s = createInitialStore(newId);
+    s = addGroup(s, 'グループ2', newId);
+    s = addGroup(s, 'グループ3', newId);
+    s = removeGroup(s, s.groups[1]!.id, newId);
+    const { root, handlers } = setup(s);
+    one(root, 'group-add').click();
+    expect(lastStore(handlers).groups.map((g) => g.name)).toEqual([
+      'グループ1',
+      'グループ3',
+      'グループ4',
+    ]);
+  });
+  it('続けて選んだとき、先に選んだファイルの遅い読み込み結果は捨てる', async () => {
+    const { root, handlers } = setup(storeWith(['a']));
+    const input = one(root, 'import') as HTMLInputElement;
+    let resolveSlow: (text: string) => void = () => undefined;
+    const slow = { size: 10, text: () => new Promise<string>((r) => (resolveSlow = r)) };
+    const fast = { size: 10, text: () => Promise.resolve('新しい') };
+    Object.defineProperty(input, 'files', { value: [slow], configurable: true });
+    input.dispatchEvent(new Event('change'));
+    Object.defineProperty(input, 'files', { value: [fast], configurable: true });
+    input.dispatchEvent(new Event('change'));
+    resolveSlow('古い');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(handlers.onImport.mock.calls).toEqual([['新しい']]);
+  });
+  it('記号だけのボタンに読み上げ用の名前が付く', () => {
+    const { root } = setup(storeWith(['佐藤']));
+    expect(one(root, 'member-delete').getAttribute('aria-label')).toBe('佐藤 を削除');
+    expect(one(root, 'group-add').getAttribute('aria-label')).toBe('グループを追加');
+    expect(one(root, 'group-rename').getAttribute('aria-label')).toBe('グループ名を変更');
+    expect(one(root, 'group-delete').getAttribute('aria-label')).toBe('グループを削除');
   });
 });

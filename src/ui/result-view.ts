@@ -61,6 +61,7 @@ export function mountResultView(
     hidden: true,
   });
   fallback.readOnly = true;
+  fallback.setAttribute('aria-label', '抽選結果（手動コピー用）');
 
   copy.addEventListener('click', () => handlers.onCopy());
   redraw.addEventListener('click', () => handlers.onRedraw());
