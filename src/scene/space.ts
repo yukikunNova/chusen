@@ -57,7 +57,7 @@ export function createSpace(stage: Stage): { dispose(): void } {
       map: sprite,
       color,
       transparent: true,
-      opacity: 0.32,
+      opacity: 0.2,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
       fog: false,

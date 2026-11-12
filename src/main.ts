@@ -4,6 +4,7 @@ import { buildCommentary } from './domain/commentary';
 import { createRand } from './domain/prng';
 import { buildRaceScript } from './domain/race-script';
 import { cryptoRandomInt } from './domain/shuffle';
+import { createFireworks } from './scene/fireworks';
 import { idleCamera, playRace, type RaceHooks } from './scene/race-player';
 import { createSpace } from './scene/space';
 import { createStage, isWebGLAvailable, type Stage } from './scene/stage';
@@ -41,11 +42,17 @@ if (stage) {
   createSpace(stage);
   createTrack(stage);
 }
+const fireworks = stage ? createFireworks(stage) : null;
 
 let app: App | null = null;
 let hud: Hud | null = null;
 let muted = false;
-const hooks: RaceHooks = {};
+const hooks: RaceHooks = {
+  onFirstFinish: () => {
+    fireworks?.start();
+    fireworks?.burstConfetti();
+  },
+};
 
 const runRace: RaceRunner = (order, onDone) => {
   if (!stage) {
@@ -80,7 +87,15 @@ app = createApp({
   download,
   confirm: (message) => window.confirm(message),
   extraNotice: null,
-  onScreenChange: () => undefined,
+  onScreenChange: (screen) => {
+    if (screen === 'result') {
+      // スキップで来た場合もここで始まる（start は二重に呼んでも 1 系統）
+      fireworks?.start();
+      fireworks?.burstConfetti();
+    } else {
+      fireworks?.stop();
+    }
+  },
   onMutedChange: (value) => {
     muted = value;
     hud?.setMuted(value);

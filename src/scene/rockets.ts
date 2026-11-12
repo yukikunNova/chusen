@@ -46,6 +46,7 @@ function shuffledIndices(count: number): number[] {
 export function createRockets(stage: Stage, names: readonly string[]): Rockets {
   const count = names.length;
   const group = new THREE.Group();
+  const tags = new THREE.Group();
   const disposables: { dispose(): void }[] = [];
   const keep = <T extends { dispose(): void }>(item: T): T => {
     disposables.push(item);
@@ -60,15 +61,15 @@ export function createRockets(stage: Stage, names: readonly string[]): Rockets {
   const nozzleGeometry = keep(new THREE.CylinderGeometry(0.38, 0.55, 0.45, 16));
   const flameGeometry = keep(new THREE.ConeGeometry(0.42, 2.2, 14));
   const windowMaterial = keep(
-    new THREE.MeshStandardMaterial({ color: 0xbff4ff, emissive: 0x29e0ff, emissiveIntensity: 1.2 }),
+    new THREE.MeshStandardMaterial({ color: 0xbff4ff, emissive: 0x29e0ff, emissiveIntensity: 0.7 }),
   );
   const nozzleMaterial = keep(new THREE.MeshStandardMaterial({ color: 0x2b2b3a, metalness: 0.6 }));
-  const noseMaterial = keep(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.35 }));
+  const noseMaterial = keep(new THREE.MeshStandardMaterial({ color: 0xd8dcf0, roughness: 0.45 }));
   const flameMaterial = keep(
     new THREE.MeshBasicMaterial({
-      color: 0xffc23d,
+      color: 0xffa52e,
       transparent: true,
-      opacity: 0.92,
+      opacity: 0.7,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
     }),
@@ -84,7 +85,7 @@ export function createRockets(stage: Stage, names: readonly string[]): Rockets {
       new THREE.MeshStandardMaterial({
         color,
         emissive: color,
-        emissiveIntensity: 0.45,
+        emissiveIntensity: 0.34,
         roughness: 0.4,
         metalness: 0.25,
       }),
@@ -137,7 +138,7 @@ export function createRockets(stage: Stage, names: readonly string[]): Rockets {
     );
     tag.scale.set(TAG_HEIGHT * label.aspect, TAG_HEIGHT, 1);
     tag.renderOrder = 10;
-    group.add(tag);
+    tags.add(tag);
 
     return {
       body,
@@ -196,7 +197,10 @@ export function createRockets(stage: Stage, names: readonly string[]): Rockets {
     velocity[i * 3] = rocket.back.x * speed + (Math.random() - 0.5) * 1.6;
     velocity[i * 3 + 1] = rocket.back.y * speed + (Math.random() - 0.5) * 1.6;
     velocity[i * 3 + 2] = rocket.back.z * speed + (Math.random() - 0.5) * 1.6;
-    tint.copy(rocket.color).lerp(white, 0.25 + Math.random() * 0.45);
+    tint
+      .copy(rocket.color)
+      .lerp(white, 0.2 + Math.random() * 0.3)
+      .multiplyScalar(0.55);
     baseColor.set([tint.r, tint.g, tint.b], i * 3);
     lifeMax[i] = 0.45 + Math.random() * 0.45 + rocket.boost * 0.4;
     life[i] = lifeMax[i]!;
@@ -234,6 +238,7 @@ export function createRockets(stage: Stage, names: readonly string[]): Rockets {
   });
 
   stage.scene.add(group);
+  stage.overlay.add(tags);
   const target = new THREE.Vector3();
 
   return {
@@ -277,6 +282,7 @@ export function createRockets(stage: Stage, names: readonly string[]): Rockets {
     dispose() {
       stop();
       stage.scene.remove(group);
+      stage.overlay.remove(tags);
       for (const item of disposables) item.dispose();
     },
   };

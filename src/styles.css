@@ -409,7 +409,7 @@ button:disabled {
 }
 
 .result-list {
-  --row: min(9vh, calc(62vh / var(--count, 5)));
+  --row: min(9vh, calc(50vh / var(--rows, 5)));
   list-style: none;
   margin: 0;
   padding: clamp(10px, 2vh, 24px) clamp(14px, 3vw, 40px);
@@ -423,8 +423,7 @@ button:disabled {
 }
 
 .result-list.two-columns {
-  --row: min(8vh, calc(124vh / var(--count, 10)));
-  grid-template-rows: repeat(calc((var(--count) + 1) / 2), auto);
+  grid-template-rows: repeat(var(--rows), auto);
   grid-auto-flow: column;
   grid-template-columns: 1fr 1fr;
   min-width: min(1000px, 94vw);
@@ -571,6 +570,7 @@ button:disabled {
   font-weight: 900;
   line-height: 1.25;
   text-align: center;
+  text-wrap: balance;
   color: #fff;
   text-shadow:
     0 0 0.14em #000,

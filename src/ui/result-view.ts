@@ -30,7 +30,8 @@ export function mountResultView(
       return item;
     }),
   );
-  list.style.setProperty('--count', String(names.length));
+  const rows = names.length >= TWO_COLUMN_MIN ? Math.ceil(names.length / 2) : names.length;
+  list.style.setProperty('--rows', String(Math.max(1, rows)));
 
   const copy = el('button', { class: 'btn', testid: 'copy', text: '結果をコピー', type: 'button' });
   const redraw = el('button', {
