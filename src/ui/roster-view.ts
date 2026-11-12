@@ -220,12 +220,12 @@ export function mountRosterView(
     const file = importInput.files?.[0];
     importInput.value = '';
     if (!file) return;
+    // 続けて選んだ場合、最後に選んだファイルの結果だけを使う（大きすぎて読まない場合も、先の読み込みは無効にする）
+    const turn = ++importTurn;
     if (file.size > IMPORT_MAX_BYTES) {
       handlers.onImportFailed();
       return;
     }
-    // 続けて選んだ場合、最後に選んだファイルの結果だけを使う
-    const turn = ++importTurn;
     file.text().then(
       (text) => {
         if (turn === importTurn) handlers.onImport(text);

@@ -261,4 +261,19 @@ describe('mountRosterView', () => {
     expect(one(root, 'group-rename').getAttribute('aria-label')).toBe('グループ名を変更');
     expect(one(root, 'group-delete').getAttribute('aria-label')).toBe('グループを削除');
   });
+  it('読み込み中に大きすぎるファイルを選んだら、先の読み込み結果も捨てる', async () => {
+    const { root, handlers } = setup(storeWith(['a']));
+    const input = one(root, 'import') as HTMLInputElement;
+    let resolveSlow: (text: string) => void = () => undefined;
+    const slow = { size: 10, text: () => new Promise<string>((r) => (resolveSlow = r)) };
+    const huge = { size: 1_000_001, text: () => Promise.resolve('{}') };
+    Object.defineProperty(input, 'files', { value: [slow], configurable: true });
+    input.dispatchEvent(new Event('change'));
+    Object.defineProperty(input, 'files', { value: [huge], configurable: true });
+    input.dispatchEvent(new Event('change'));
+    resolveSlow('古い');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(handlers.onImportFailed).toHaveBeenCalledTimes(1);
+    expect(handlers.onImport).not.toHaveBeenCalled();
+  });
 });
