@@ -1,8 +1,9 @@
 import './styles.css';
 import { createApp, type App, type RaceRunner } from './app';
+import { createSfx, type SfxKind } from './audio/sfx';
 import { buildCommentary } from './domain/commentary';
 import { createRand } from './domain/prng';
-import { buildRaceScript } from './domain/race-script';
+import { buildRaceScript, type RaceEventKind } from './domain/race-script';
 import { cryptoRandomInt } from './domain/shuffle';
 import { createFireworks } from './scene/fireworks';
 import { idleCamera, playRace, type RaceHooks } from './scene/race-player';
@@ -42,13 +43,50 @@ if (stage) {
   createSpace(stage);
   createTrack(stage);
 }
-const fireworks = stage ? createFireworks(stage) : null;
+const sfx = createSfx(() => new AudioContext(), false);
+/** イベントの種類ごとの効果音。 */
+const EVENT_SOUND: Record<RaceEventKind, SfxKind> = {
+  rocketStart: 'boost',
+  boost: 'boost',
+  overtake: 'boost',
+  finalComeback: 'boost',
+  spin: 'spin',
+  slowStart: 'stall',
+  weave: 'stall',
+  stall: 'stall',
+  attack: 'attack',
+};
+/** 一斉打ち上げで炸裂音が重なりすぎないよう、間隔を空ける（ミリ秒）。 */
+const FIREWORK_SOUND_GAP = 90;
+let lastFireworkSound = 0;
+const fireworks = stage
+  ? createFireworks(stage, () => {
+      const now = performance.now();
+      if (now - lastFireworkSound < FIREWORK_SOUND_GAP) return;
+      lastFireworkSound = now;
+      sfx.play('firework');
+    })
+  : null;
 
 let app: App | null = null;
 let hud: Hud | null = null;
 let muted = false;
 const hooks: RaceHooks = {
+  onCount: () => sfx.play('count'),
+  onGo: () => {
+    sfx.play('go');
+    sfx.startBgm();
+  },
+  onEvent: (event) => sfx.play(EVENT_SOUND[event.kind]),
+  onEnd: (skipped) => {
+    sfx.stopBgm();
+    // スキップ時は 1 着ゴールを通らないので、ここで鳴らす
+    if (skipped) sfx.play('fanfare');
+  },
   onFirstFinish: () => {
+    sfx.stopBgm();
+    sfx.play('goal');
+    sfx.play('fanfare');
     fireworks?.start();
     fireworks?.salvo();
     fireworks?.burstConfetti();
@@ -56,6 +94,8 @@ const hooks: RaceHooks = {
 };
 
 const runRace: RaceRunner = (order, onDone) => {
+  // 「抽選スタート」のクリック内で呼ばれるので、ここで音を使えるようにする
+  sfx.unlock();
   if (!stage) {
     onDone();
     return { skip: () => undefined };
@@ -100,6 +140,7 @@ app = createApp({
   },
   onMutedChange: (value) => {
     muted = value;
+    sfx.setMuted(value);
     hud?.setMuted(value);
   },
 });
