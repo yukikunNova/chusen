@@ -63,9 +63,9 @@ describe('pickVehicles', () => {
     let n = 0;
     return () => (n++ % 10) / 10;
   };
-  it('乗り物は 8 種類', () => {
-    expect(VEHICLE_KINDS).toHaveLength(8);
-    expect(new Set(VEHICLE_KINDS).size).toBe(8);
+  it('乗り物は 16 種類', () => {
+    expect(VEHICLE_KINDS).toHaveLength(16);
+    expect(new Set(VEHICLE_KINDS).size).toBe(16);
   });
   it('人数ぶん返し、種類数以下なら全員ちがう乗り物になる', () => {
     for (let count = 1; count <= VEHICLE_KINDS.length; count++) {
@@ -76,8 +76,8 @@ describe('pickVehicles', () => {
     }
   });
   it('種類数を超えたら、どの種類も同じくらい使う', () => {
-    const picked = pickVehicles(20, stepping());
-    expect(picked).toHaveLength(20);
+    const picked = pickVehicles(40, stepping());
+    expect(picked).toHaveLength(40);
     for (const kind of VEHICLE_KINDS) {
       const used = picked.filter((k) => k === kind).length;
       expect(used).toBeGreaterThanOrEqual(2);
