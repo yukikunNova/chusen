@@ -114,7 +114,7 @@ export function mountRosterView(
   const container = el('section', { class: 'screen roster-screen' }, [
     el('header', { class: 'roster-header' }, [
       el('div', { class: 'title' }, [
-        el('h1', { text: '銀河グランプリ' }),
+        el('h1', { text: 'ドパ抽' }),
         el('p', { text: '発表順抽選' }),
       ]),
       el('div', { class: 'tools' }, [mute, exportBtn, importBtn, importInput]),

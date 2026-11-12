@@ -17,7 +17,7 @@ export const ITEM_NAMES: Record<AttackItem, string> = {
 export const TEMPLATES: Record<CommentaryKind, readonly string[]> = {
   start: [
     '全宇宙が見守る中、発表順を賭けた戦いが今始まる！',
-    'たかが発表順、されど発表順。銀河グランプリ開幕！',
+    'たかが発表順、されど発表順。ドパ抽開幕！',
     '本日のメインイベント、発表順決定戦！ 各機エンジン全開！',
     '誰もトップバッターにはなりたくない…はず！ 運命のスタートです！',
   ],
