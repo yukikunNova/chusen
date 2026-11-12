@@ -1,7 +1,9 @@
 import * as THREE from 'three';
-import { TRACK_HALF_WIDTH, TRACK_LENGTH, trackPoint } from './layout';
+import { COURSE_LENGTH, generateCourse, type Course, type Vec3 } from './course';
+import { TRACK_HALF_WIDTH } from './layout';
 import type { Stage } from './stage';
 import { checkerTexture, gridTexture, labelTexture } from './textures';
+import { THEMES, type Theme } from './themes';
 
 export type TrackFrame = {
   pos: THREE.Vector3;
@@ -12,40 +14,33 @@ export type TrackFrame = {
   up: THREE.Vector3;
 };
 
-const WORLD_UP = new THREE.Vector3(0, 1, 0);
-const EPS = 0.002;
+/** いま舞台に出ているコース。createTrack が差し替える。 */
+let current: Course = generateCourse(Math.random);
 
-function point(p: number): THREE.Vector3 {
-  const { x, y, z } = trackPoint(p);
-  return new THREE.Vector3(x, y, z);
+export function currentCourse(): Course {
+  return current;
 }
 
-/** コース上 p の位置と向き。 */
+const vec = (v: Vec3) => new THREE.Vector3(v.x, v.y, v.z);
+
+/** いまのコース上 p の位置と向き。 */
 export function trackFrame(p: number): TrackFrame {
-  const pos = point(p);
-  const tangent = point(p + EPS)
-    .sub(point(p - EPS))
-    .normalize();
-  const right = new THREE.Vector3().crossVectors(tangent, WORLD_UP).normalize();
-  const up = new THREE.Vector3().crossVectors(right, tangent).normalize();
-  return { pos, tangent, right, up };
+  const f = current.frameAt(p);
+  return { pos: vec(f.pos), tangent: vec(f.tangent), right: vec(f.right), up: vec(f.up) };
 }
 
 const P_MIN = -0.05;
 const P_MAX = 1.1;
-const SEGMENTS = 260;
+const SEGMENTS = 520;
 const FLOOR_DROP = 3.4;
+const RING_COUNT = 14;
+const PROP_COUNT = 90;
 
 function edgeCurve(side: number, lift: number): THREE.CatmullRomCurve3 {
   const pts: THREE.Vector3[] = [];
   for (let i = 0; i <= SEGMENTS; i++) {
     const f = trackFrame(P_MIN + ((P_MAX - P_MIN) * i) / SEGMENTS);
-    pts.push(
-      f.pos
-        .clone()
-        .addScaledVector(f.right, side * TRACK_HALF_WIDTH)
-        .addScaledVector(f.up, lift),
-    );
+    pts.push(f.pos.addScaledVector(f.right, side * TRACK_HALF_WIDTH).addScaledVector(f.up, lift));
   }
   return new THREE.CatmullRomCurve3(pts);
 }
@@ -56,16 +51,182 @@ function orient(object: THREE.Object3D, frame: TrackFrame) {
   object.lookAt(frame.pos.clone().add(frame.tangent));
 }
 
-/** ネオンのコース・リング・スタート線・ゴールゲートを作る。 */
-export function createTrack(stage: Stage): { dispose(): void } {
+type Keep = <T extends { dispose(): void }>(item: T) => T;
+
+/** 沿道の飾り。テーマごとに形を変え、コースの両脇に散らす。 */
+function createProps(theme: Theme, keep: Keep): THREE.Object3D {
+  const group = new THREE.Group();
+  const dummy = new THREE.Object3D();
+  const color = new THREE.Color();
+  const pickColor = () =>
+    color.setHex(theme.propColors[Math.floor(Math.random() * theme.propColors.length)]!);
+
+  /** 1 つの形をコース沿いに count 個置く。place が大きさと追加の向きを決める。 */
+  const scatter = (
+    geometry: THREE.BufferGeometry,
+    material: THREE.Material,
+    count: number,
+    place: (object: THREE.Object3D, frame: TrackFrame, side: number) => void,
+  ): THREE.InstancedMesh => {
+    const mesh = new THREE.InstancedMesh(keep(geometry), keep(material), count);
+    for (let i = 0; i < count; i++) {
+      const p = P_MIN + (P_MAX - P_MIN) * ((i + Math.random()) / count);
+      const frame = trackFrame(p);
+      const side = i % 2 === 0 ? -1 : 1;
+      dummy.position.copy(frame.pos);
+      dummy.rotation.set(0, 0, 0);
+      dummy.scale.setScalar(1);
+      place(dummy, frame, side);
+      dummy.updateMatrix();
+      mesh.setMatrixAt(i, dummy.matrix);
+      mesh.setColorAt(i, pickColor());
+    }
+    mesh.instanceMatrix.needsUpdate = true;
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    // 広い範囲に散るので、まとめての視錐台判定はしない
+    mesh.frustumCulled = false;
+    group.add(mesh);
+    return mesh;
+  };
+  /** コースの外側へ out、上へ up だけ離す。 */
+  const offset = (
+    object: THREE.Object3D,
+    frame: TrackFrame,
+    side: number,
+    out: number,
+    up: number,
+  ) =>
+    object.position
+      .addScaledVector(frame.right, side * (TRACK_HALF_WIDTH + out))
+      .addScaledVector(frame.up, up);
+  const rnd = (min: number, max: number) => min + Math.random() * (max - min);
+
+  switch (theme.prop) {
+    case 'cubes':
+      scatter(
+        new THREE.BoxGeometry(1, 1, 1),
+        new THREE.MeshBasicMaterial({ wireframe: true }),
+        PROP_COUNT,
+        (o, f, side) => {
+          offset(o, f, side, rnd(14, 60), rnd(-14, 30));
+          o.scale.setScalar(rnd(3, 9));
+          o.rotation.set(rnd(0, 3), rnd(0, 3), rnd(0, 3));
+        },
+      );
+      break;
+    case 'rocks':
+      scatter(
+        new THREE.ConeGeometry(1, 1, 6),
+        new THREE.MeshStandardMaterial({
+          color: 0x2a1410,
+          emissive: 0xff4a00,
+          emissiveIntensity: 0.45,
+          roughness: 0.9,
+          flatShading: true,
+        }),
+        PROP_COUNT,
+        (o, f, side) => {
+          offset(o, f, side, rnd(10, 55), rnd(-16, -4));
+          o.scale.set(rnd(4, 9), rnd(12, 34), rnd(4, 9));
+          o.rotation.y = rnd(0, 3);
+        },
+      );
+      // 舞い上がる火の粉のかわりに、宙に浮く溶岩のかけら
+      scatter(
+        new THREE.IcosahedronGeometry(1, 0),
+        new THREE.MeshBasicMaterial(),
+        PROP_COUNT,
+        (o, f, side) => {
+          offset(o, f, side, rnd(8, 70), rnd(0, 40));
+          o.scale.setScalar(rnd(0.5, 1.8));
+        },
+      );
+      break;
+    case 'crystals':
+      scatter(
+        new THREE.OctahedronGeometry(1, 0),
+        new THREE.MeshStandardMaterial({
+          color: 0xffffff,
+          emissive: 0x2f8fff,
+          emissiveIntensity: 0.55,
+          roughness: 0.2,
+          transparent: true,
+          opacity: 0.85,
+          flatShading: true,
+        }),
+        PROP_COUNT,
+        (o, f, side) => {
+          offset(o, f, side, rnd(10, 55), rnd(-12, 6));
+          o.scale.set(rnd(2.5, 5), rnd(9, 24), rnd(2.5, 5));
+          o.rotation.set(rnd(-0.3, 0.3), rnd(0, 3), rnd(-0.3, 0.3));
+        },
+      );
+      break;
+    case 'sweets': {
+      // あめ玉とドーナツ
+      scatter(
+        new THREE.SphereGeometry(1, 16, 12),
+        new THREE.MeshStandardMaterial({ roughness: 0.35, emissive: 0x402040 }),
+        PROP_COUNT / 2,
+        (o, f, side) => {
+          offset(o, f, side, rnd(10, 55), rnd(-10, 22));
+          o.scale.setScalar(rnd(2.5, 6));
+        },
+      );
+      scatter(
+        new THREE.TorusGeometry(1, 0.42, 10, 24),
+        new THREE.MeshStandardMaterial({ roughness: 0.4, emissive: 0x402040 }),
+        PROP_COUNT / 2,
+        (o, f, side) => {
+          offset(o, f, side, rnd(12, 65), rnd(6, 36));
+          o.scale.setScalar(rnd(2.5, 5.5));
+          o.rotation.set(rnd(0, 3), rnd(0, 3), 0);
+        },
+      );
+      break;
+    }
+    case 'curtains':
+      scatter(
+        new THREE.PlaneGeometry(1, 1),
+        new THREE.MeshBasicMaterial({
+          transparent: true,
+          // 重なると白く飛ぶので、薄く・少なめにする
+          opacity: 0.07,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending,
+          fog: false,
+        }),
+        PROP_COUNT / 2,
+        (o, f, side) => {
+          offset(o, f, side, rnd(20, 90), rnd(20, 70));
+          o.scale.set(rnd(18, 40), rnd(50, 110), 1);
+          o.rotation.y = rnd(-0.6, 0.6);
+        },
+      );
+      break;
+  }
+  return group;
+}
+
+/**
+ * course を舞台に出す（床・レール・リング・スタート線・ゴールゲート・沿道の飾り）。
+ * 以後 trackFrame はこのコースを返す。背景と霧の色もテーマに合わせる。
+ */
+export function createTrack(stage: Stage, course: Course): { dispose(): void } {
+  current = course;
+  const theme = THEMES[course.theme];
   const group = new THREE.Group();
   const disposables: { dispose(): void }[] = [];
-  const keep = <T extends { dispose(): void }>(item: T): T => {
+  const keep: Keep = (item) => {
     disposables.push(item);
     return item;
   };
 
-  // 床（格子模様の帯）
+  stage.renderer.setClearColor(theme.sky);
+  if (stage.scene.fog) stage.scene.fog.color.setHex(theme.sky);
+
+  // 床（格子模様の帯）。ジャンプ台の途中は床を張らない
   const positions: number[] = [];
   const uvs: number[] = [];
   const indices: number[] = [];
@@ -78,9 +239,9 @@ export function createTrack(stage: Stage): { dispose(): void } {
         .addScaledVector(f.right, side * TRACK_HALF_WIDTH)
         .addScaledVector(f.up, -FLOOR_DROP);
       positions.push(v.x, v.y, v.z);
-      uvs.push(side < 0 ? 0 : 4, (p * TRACK_LENGTH) / 9.5);
+      uvs.push(side < 0 ? 0 : 4, (p * COURSE_LENGTH) / 9.5);
     }
-    if (i < SEGMENTS) {
+    if (i < SEGMENTS && course.hasFloorAt(p + (P_MAX - P_MIN) / SEGMENTS / 2)) {
       const a = i * 2;
       indices.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
     }
@@ -91,7 +252,7 @@ export function createTrack(stage: Stage): { dispose(): void } {
   floorGeometry.setIndex(indices);
   const floorMaterial = keep(
     new THREE.MeshBasicMaterial({
-      map: keep(gridTexture()),
+      map: keep(gridTexture(theme.floor, theme.grid, theme.band)),
       transparent: true,
       side: THREE.DoubleSide,
       depthWrite: false,
@@ -100,24 +261,43 @@ export function createTrack(stage: Stage): { dispose(): void } {
   group.add(new THREE.Mesh(floorGeometry, floorMaterial));
 
   // 両端の光るレール
-  for (const [side, color] of [
-    [-1, 0x29e0ff],
-    [1, 0xff2e93],
-  ] as const) {
-    const rail = keep(new THREE.TubeGeometry(edgeCurve(side, -FLOOR_DROP + 0.5), 400, 0.42, 8));
+  theme.rails.forEach((color, i) => {
+    const side = i === 0 ? -1 : 1;
+    const rail = keep(new THREE.TubeGeometry(edgeCurve(side, -FLOOR_DROP + 0.5), 600, 0.42, 8));
     group.add(new THREE.Mesh(rail, keep(new THREE.MeshBasicMaterial({ color }))));
-  }
+  });
 
-  // コースをくぐるネオンリング
+  // コースをくぐるリング。きりもみ区間は間隔を詰めてトンネルのように見せる
   const ringGeometry = keep(new THREE.TorusGeometry(TRACK_HALF_WIDTH + 5, 0.5, 10, 64));
-  const ringColors = [0x9d4dff, 0x29e0ff, 0xff2e93, 0xffd60a];
-  for (let i = 1; i < 14; i++) {
-    const material = keep(
-      new THREE.MeshBasicMaterial({ color: ringColors[i % ringColors.length] }),
-    );
-    const ring = new THREE.Mesh(ringGeometry, material);
-    orient(ring, trackFrame(i / 14));
+  const ringMaterials = theme.rings.map((color) => keep(new THREE.MeshBasicMaterial({ color })));
+  const ringAt: number[] = [];
+  for (let i = 1; i < RING_COUNT; i++) ringAt.push(i / RING_COUNT);
+  for (const segment of course.segments) {
+    if (segment.kind !== 'corkscrew') continue;
+    for (let i = 0; i <= 8; i++) ringAt.push(segment.from + ((segment.to - segment.from) * i) / 8);
+  }
+  ringAt.forEach((p, i) => {
+    const ring = new THREE.Mesh(ringGeometry, ringMaterials[i % ringMaterials.length]);
+    orient(ring, trackFrame(p));
     group.add(ring);
+  });
+
+  // ジャンプ台: 踏み切りと着地に光る板を置く
+  const padGeometry = keep(new THREE.PlaneGeometry(TRACK_HALF_WIDTH * 2, 5));
+  const padMaterial = keep(
+    new THREE.MeshBasicMaterial({ color: 0xffd60a, side: THREE.DoubleSide }),
+  );
+  for (const segment of course.segments) {
+    if (segment.kind !== 'jump') continue;
+    const length = segment.to - segment.from;
+    for (const u of [0.2, 0.85]) {
+      const frame = trackFrame(segment.from + length * u);
+      const pad = new THREE.Mesh(padGeometry, padMaterial);
+      orient(pad, frame);
+      pad.rotateX(-Math.PI / 2);
+      pad.position.addScaledVector(frame.up, -FLOOR_DROP + 0.08);
+      group.add(pad);
+    }
   }
 
   // スタート線
@@ -173,6 +353,8 @@ export function createTrack(stage: Stage): { dispose(): void } {
   goal.add(goalLine);
   orient(goal, trackFrame(1));
   group.add(goal);
+
+  group.add(createProps(theme, keep));
 
   stage.scene.add(group);
   return {

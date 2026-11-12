@@ -555,6 +555,45 @@ button:disabled {
   }
 }
 
+.hud-course {
+  position: absolute;
+  top: 5vh;
+  left: 50%;
+  transform: translateX(-50%);
+  display: grid;
+  justify-items: center;
+  gap: 0.1em;
+  width: max-content;
+  max-width: 92vw;
+  padding: 0.3em 1.2em;
+  border-radius: 0.3em;
+  border-bottom: 0.14em solid var(--accent2);
+  background: linear-gradient(92deg, rgb(8 4 26 / 88%), rgb(40 8 60 / 88%));
+  color: #fff;
+  font-weight: 900;
+  text-align: center;
+  animation: course-in 0.5s cubic-bezier(0.2, 1.5, 0.4, 1) both;
+}
+
+.hud-course-label {
+  font-size: max(2.4vh, 13px);
+  letter-spacing: 0.3em;
+  color: var(--accent2);
+}
+
+.hud-course-name {
+  font-size: max(5.6vh, 24px);
+  line-height: 1.15;
+  text-shadow: 0 0 0.3em var(--accent);
+}
+
+@keyframes course-in {
+  from {
+    transform: translateX(-50%) translateY(-120%);
+    opacity: 0;
+  }
+}
+
 .hud-telop {
   position: absolute;
   left: 50%;
@@ -650,6 +689,7 @@ button:disabled {
 
 @media (prefers-reduced-motion: reduce) {
   .hud-countdown.pop,
+  .hud-course,
   .hud-telop.pop,
   .start-btn,
   .result-item {

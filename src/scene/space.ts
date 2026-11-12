@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { TRACK_LENGTH } from './layout';
+import { COURSE_LENGTH } from './course';
 import type { Stage } from './stage';
 import { glowTexture } from './textures';
 
@@ -80,7 +80,7 @@ export function createSpace(stage: Stage): { dispose(): void } {
         out.set(
           Math.cos(a) * radius,
           Math.sin(a) * radius,
-          160 - Math.random() * (TRACK_LENGTH + 520),
+          160 - Math.random() * (COURSE_LENGTH + 520),
         );
       },
       sprite,
@@ -110,7 +110,7 @@ export function createSpace(stage: Stage): { dispose(): void } {
   );
   ring.rotation.x = Math.PI / 2.3;
   planet.add(globe, ring);
-  planet.position.set(-300, 120, -TRACK_LENGTH - 260);
+  planet.position.set(-300, 120, -COURSE_LENGTH - 260);
   planet.rotation.z = 0.35;
   near.add(planet);
 

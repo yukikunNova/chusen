@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { VEHICLE_KINDS, laneOffset, nameTagText, pickVehicles, trackPoint } from './layout';
+import { VEHICLE_KINDS, laneOffset, nameTagText, pickVehicles } from './layout';
 
 const offsets = (count: number) => Array.from({ length: count }, (_, i) => laneOffset(i, count));
 
@@ -20,27 +20,6 @@ describe('laneOffset', () => {
     expect(rows.size).toBe(2);
     for (const xs of rows.values()) expect(new Set(xs).size).toBe(xs.length);
     expect(Math.max(...o.map((p) => Math.abs(p.x)))).toBeLessThanOrEqual(16);
-  });
-});
-
-describe('trackPoint', () => {
-  it('スタートとゴールが異なり、進むほど必ず前進する', () => {
-    expect(trackPoint(0)).not.toEqual(trackPoint(1));
-    let prev = trackPoint(-0.05);
-    for (let p = -0.04; p <= 1.1; p += 0.01) {
-      const cur = trackPoint(p);
-      const d = Math.hypot(cur.x - prev.x, cur.y - prev.y, cur.z - prev.z);
-      expect(d).toBeGreaterThan(0);
-      expect(cur.z).toBeLessThan(prev.z);
-      prev = cur;
-    }
-  });
-  it('カーブと起伏がある', () => {
-    const pts = Array.from({ length: 101 }, (_, i) => trackPoint(i / 100));
-    const span = (f: (p: { x: number; y: number }) => number) =>
-      Math.max(...pts.map(f)) - Math.min(...pts.map(f));
-    expect(span((p) => p.x)).toBeGreaterThan(20);
-    expect(span((p) => p.y)).toBeGreaterThan(5);
   });
 });
 

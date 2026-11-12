@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { laneOffset, nameTagText, pickVehicles } from './layout';
 import type { Stage } from './stage';
 import { glowTexture, labelTexture } from './textures';
-import { trackFrame } from './track';
+import { currentCourse, trackFrame } from './track';
 import { buildVehicle, createVehiclePalette } from './vehicles';
 
 /** 各 0〜1。spin: 回転、boost: 加速、sway: ふらつき。 */
@@ -221,7 +221,7 @@ export function createRockets(stage: Stage, names: readonly string[]): Rockets {
       rocket.body.position
         .copy(frame.pos)
         .addScaledVector(frame.right, rocket.lane.x + swayX)
-        .addScaledVector(frame.up, rocket.lane.y + bob);
+        .addScaledVector(frame.up, rocket.lane.y + bob + currentCourse().liftAt(p));
       rocket.body.up.copy(frame.up);
       rocket.body.lookAt(target.copy(rocket.body.position).add(frame.tangent));
       const roll =

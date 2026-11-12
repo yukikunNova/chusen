@@ -5,6 +5,7 @@ import { buildCommentary } from './domain/commentary';
 import { createRand } from './domain/prng';
 import { buildRaceScript, type RaceEventKind } from './domain/race-script';
 import { cryptoRandomInt } from './domain/shuffle';
+import { generateCourse } from './scene/course';
 import { createFireworks } from './scene/fireworks';
 import { idleCamera, playRace, type RaceHooks } from './scene/race-player';
 import { createSpace } from './scene/space';
@@ -49,10 +50,9 @@ function tryCreateStage(): Stage | null {
   }
 }
 const stage = tryCreateStage();
-if (stage) {
-  createSpace(stage);
-  createTrack(stage);
-}
+if (stage) createSpace(stage);
+/** 舞台に出ているコース。抽選のたびに作り直す。 */
+let track = stage ? createTrack(stage, generateCourse(Math.random)) : null;
 const sfx = createSfx(() => new AudioContext(), false);
 /** イベントの種類ごとの効果音。 */
 const EVENT_SOUND: Record<RaceEventKind, SfxKind> = {
@@ -125,6 +125,9 @@ const runRace: RaceRunner = (order, onDone) => {
   const seed = Date.now();
   const script = buildRaceScript(order, createRand(seed));
   const cues = buildCommentary(script, createRand(seed + 1));
+  // コースも毎回作り直す（見た目だけで、順位には関係しない）
+  track?.dispose();
+  track = createTrack(stage, generateCourse(createRand(seed + 3)));
   const raceHud = mountHud(
     root,
     { onSkip: () => app?.skip(), onToggleMute: () => app?.setMuted(!muted) },

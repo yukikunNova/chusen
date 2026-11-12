@@ -21,6 +21,15 @@ describe('mountHud', () => {
     hud.setTelop(null);
     expect(one(root, 'telop').hidden).toBe(true);
   });
+  it('コース名を出し、null で消す', () => {
+    const { root, hud } = setup();
+    expect(one(root, 'course-name').hidden).toBe(true);
+    hud.setCourseName('マグマきりもみ街道');
+    expect(one(root, 'course-name').textContent).toContain('マグマきりもみ街道');
+    expect(one(root, 'course-name').hidden).toBe(false);
+    hud.setCourseName(null);
+    expect(one(root, 'course-name').hidden).toBe(true);
+  });
   it('カウントダウンを出し、null で消す', () => {
     const { root, hud } = setup();
     hud.setCountdown('3');

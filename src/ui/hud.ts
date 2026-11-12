@@ -5,6 +5,8 @@ export type Hud = {
   /** '3' '2' '1' 'GO!' など。null で消す。 */
   setCountdown(text: string | null): void;
   setTelop(text: string | null): void;
+  /** 今回のコースの呼び名。null で消す。 */
+  setCourseName(name: string | null): void;
   /** 暫定順位。先頭が 1 位。 */
   setRanking(entries: readonly RankingEntry[]): void;
   setMuted(muted: boolean): void;
@@ -15,6 +17,7 @@ export type HudHandlers = { onSkip(): void; onToggleMute(): void };
 export function mountHud(root: HTMLElement, handlers: HudHandlers, muted: boolean): Hud {
   const countdown = el('div', { class: 'hud-countdown', testid: 'countdown', hidden: true });
   const telop = el('div', { class: 'hud-telop', testid: 'telop', hidden: true });
+  const courseName = el('div', { class: 'hud-course', testid: 'course-name', hidden: true });
   const ranking = el('ol', { class: 'hud-ranking', testid: 'ranking' });
   // 途中経過の飾り。順位が入れ替わるたびに読み上げられないようにする
   ranking.setAttribute('aria-hidden', 'true');
@@ -27,6 +30,7 @@ export function mountHud(root: HTMLElement, handlers: HudHandlers, muted: boolea
   const mute = el('button', { class: 'btn small', testid: 'hud-mute', type: 'button' });
   const container = el('section', { class: 'screen hud' }, [
     countdown,
+    courseName,
     ranking,
     telop,
     el('div', { class: 'hud-buttons' }, [mute, skip]),
@@ -39,6 +43,7 @@ export function mountHud(root: HTMLElement, handlers: HudHandlers, muted: boolea
   const rows = new Map<string, HTMLElement>();
   let lastCountdown: string | null = null;
   let lastTelop: string | null = null;
+  let lastCourseName: string | null = null;
 
   const hud: Hud = {
     setCountdown(text) {
@@ -63,6 +68,19 @@ export function mountHud(root: HTMLElement, handlers: HudHandlers, muted: boolea
         void telop.offsetWidth;
         telop.classList.add('pop');
       }
+    },
+    setCourseName(name) {
+      if (name === lastCourseName) return;
+      lastCourseName = name;
+      courseName.hidden = name === null;
+      courseName.replaceChildren(
+        ...(name === null
+          ? []
+          : [
+              el('span', { class: 'hud-course-label', text: '本日のコース' }),
+              el('span', { class: 'hud-course-name', text: name }),
+            ]),
+      );
     },
     setRanking(entries) {
       // 行は位置を動かして入れ替える（DOM の順は変えない）。読み上げは結果画面の一覧に任せる
