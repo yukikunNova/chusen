@@ -1,0 +1,302 @@
+import * as THREE from 'three';
+import type { Cue } from '../domain/commentary';
+import {
+  TIMELINE,
+  progressAt,
+  rankingAt,
+  type RaceEvent,
+  type RaceScript,
+} from '../domain/race-script';
+import type { Hud } from '../ui/hud';
+import { createAttacks } from './attacks';
+import {
+  activeCue,
+  attackFlight,
+  eventFx,
+  hookDue,
+  rankingVisibleAt,
+  shotAt,
+  type Shot,
+} from './direction';
+import { laneOffset } from './layout';
+import { createRaceClock } from './race-clock';
+import { createRockets } from './rockets';
+import type { Stage } from './stage';
+import { trackFrame } from './track';
+
+/** 花火と音の差し込み口。各コールバックは該当時刻を過ぎた最初のフレームで 1 回だけ呼ぶ。 */
+export type RaceHooks = {
+  onCount?(n: 3 | 2 | 1): void;
+  onGo?(): void;
+  onEvent?(event: RaceEvent): void;
+  /** 1 着がゴール線を越えた瞬間。スキップ時は呼ばれない。 */
+  onFirstFinish?(): void;
+  /** onDone の直前。 */
+  onEnd?(skipped: boolean): void;
+};
+
+const GO_UNTIL = 3.8;
+const RANKING_INTERVAL = 0.25;
+/** ゴール後もそのまま走り抜ける速さ（進行度 / 秒）と上限。 */
+const OVERRUN_SPEED = 0.045;
+const OVERRUN_MAX = 1.09;
+const BASE_FOV = 58;
+/** 攻撃の着弾後もカメラが被弾機を気にし続ける秒数と、視線を寄せる割合。 */
+const ATTACK_LINGER = 0.7;
+const ATTACK_PULL = 0.55;
+
+function countdownText(t: number): string | null {
+  if (t < 1) return '3';
+  if (t < 2) return '2';
+  if (t < TIMELINE.countdownEnd) return '1';
+  if (t < GO_UNTIL) return 'GO!';
+  return null;
+}
+
+/** レース外（名簿・結果画面）のゆっくり漂うカメラ。 */
+export function idleCamera(stage: Stage, where: 'start' | 'goal', time: number) {
+  const drift = stage.reducedMotion ? 0 : 1;
+  if (where === 'start') {
+    const f = trackFrame(-0.035);
+    stage.camera.position
+      .copy(f.pos)
+      .addScaledVector(f.up, 9 + Math.sin(time * 0.21) * 2 * drift)
+      .addScaledVector(f.right, Math.sin(time * 0.13) * 10 * drift);
+    stage.camera.lookAt(trackFrame(0.09).pos);
+  } else {
+    const f = trackFrame(0.93);
+    stage.camera.position
+      .copy(f.pos)
+      .addScaledVector(f.up, 4 + Math.sin(time * 0.17) * 1.5 * drift)
+      .addScaledVector(f.right, Math.sin(time * 0.11) * 12 * drift);
+    const look = trackFrame(1.02);
+    stage.camera.lookAt(look.pos.addScaledVector(look.up, 30));
+  }
+}
+
+/** 台本を実時間に沿って再生する。結果は台本で決まっており、ここでは変わらない。 */
+export function playRace(
+  stage: Stage,
+  script: RaceScript,
+  cues: readonly Cue[],
+  hud: Hud,
+  hooks: RaceHooks,
+  onDone: () => void,
+): { skip(): void } {
+  const count = script.racers.length;
+  const rockets = createRockets(
+    stage,
+    script.racers.map((r) => r.name),
+  );
+  const attacks = createAttacks(stage);
+  const clock = createRaceClock(() => performance.now(), TIMELINE.duration);
+  const lineupHalfWidth =
+    Math.max(...script.racers.map((_, i) => Math.abs(laneOffset(i, count).x))) + 5;
+
+  let done = false;
+  let prevT = -1;
+  let rankingAt_ = -Infinity;
+  let packP = 0;
+  let leadP = 0;
+  let lastShot: Shot | null = null;
+  let shake = 0;
+  const lookTarget = new THREE.Vector3();
+  let attackPull = 0;
+  const attackFocus = new THREE.Vector3();
+  const crossed = (time: number, t: number) => prevT < time && t >= time;
+
+  function fireHooks(t: number) {
+    // 音や揺れの合図は、遅れすぎたら出さない（タブ復帰時に一度に鳴らさない）
+    if (hookDue(prevT, t, 0)) hooks.onCount?.(3);
+    if (hookDue(prevT, t, 1)) hooks.onCount?.(2);
+    if (hookDue(prevT, t, 2)) hooks.onCount?.(1);
+    if (hookDue(prevT, t, TIMELINE.countdownEnd)) hooks.onGo?.();
+    for (const event of script.events) {
+      if (!hookDue(prevT, t, event.t)) continue;
+      shake = 1;
+      if (event.kind === 'attack' && event.item) {
+        shake = 1.8;
+        attacks.explode(event.item, rockets.positionOf(event.racer));
+      }
+      hooks.onEvent?.(event);
+    }
+    const winner = script.racers[0];
+    // 1 着ゴールは遅れても必ず知らせる（BGM 停止と花火開始のため）
+    if (winner && crossed(winner.finishTime, t)) {
+      shake = 1.6;
+      hooks.onFirstFinish?.();
+    }
+  }
+
+  /** 全機を置き、集団の平均と先頭の進行度を返す。 */
+  function placeRockets(t: number): { avg: number; lead: number } {
+    let sum = 0;
+    let lead = 0;
+    script.racers.forEach((racer, i) => {
+      let p = progressAt(racer, t);
+      if (t > racer.finishTime) {
+        p = Math.min(OVERRUN_MAX, 1 + (t - racer.finishTime) * OVERRUN_SPEED);
+      }
+      rockets.setState(i, p, eventFx(script, i, t));
+      sum += p;
+      lead = Math.max(lead, p);
+    });
+    return { avg: count > 0 ? sum / count : 0, lead };
+  }
+
+  /** 飛んでいる攻撃アイテムを、攻撃した機体から被弾する機体へ運ぶ。 */
+  function placeAttacks(t: number, dt: number) {
+    let flying = false;
+    let watching = false;
+    for (const event of script.events) {
+      if (event.kind !== 'attack' || event.from === undefined || !event.item) continue;
+      const to = rockets.positionOf(event.racer);
+      const k = attackFlight(event, t);
+      if (k !== null) {
+        attacks.fly(event.item, rockets.positionOf(event.from), to, k);
+        flying = true;
+      }
+      if (k !== null || (t >= event.t && t < event.t + ATTACK_LINGER)) {
+        attackFocus.copy(to);
+        watching = true;
+      }
+    }
+    if (!flying) attacks.hide();
+    // カメラの視線を被弾機へ寄せる強さ。急に振らないよう、なめらかに増減させる
+    attackPull += ((watching ? ATTACK_PULL : 0) - attackPull) * Math.min(1, dt * 5);
+  }
+
+  function placeCamera(t: number, dt: number, avg: number, lead: number) {
+    const camera = stage.camera;
+    const shot = shotAt(t);
+    const cut = shot !== lastShot;
+    lastShot = shot;
+    // カットが変わった瞬間は追従の遅れを捨てて切り替える
+    const follow = cut ? 1 : Math.min(1, dt * 4);
+    packP += (avg - packP) * follow;
+    leadP += (lead - leadP) * follow;
+    let fov = BASE_FOV;
+
+    switch (shot) {
+      case 'lineup': {
+        // 整列カット: 列の正面を横になめる
+        const side = ((t / TIMELINE.countdownEnd) * 2 - 1) * lineupHalfWidth;
+        const front = trackFrame(0.03);
+        const start = trackFrame(0);
+        camera.position
+          .copy(front.pos)
+          .addScaledVector(front.right, side)
+          .addScaledVector(front.up, 2.2);
+        lookTarget.copy(start.pos).addScaledVector(start.right, side * 0.55);
+        break;
+      }
+      case 'chase': {
+        // 追走カット: 集団の少し後ろ上から
+        const behind = trackFrame(packP - 0.052);
+        camera.position.copy(behind.pos).addScaledVector(behind.up, 9.5);
+        lookTarget.copy(trackFrame(packP + 0.05).pos);
+        break;
+      }
+      case 'overhead': {
+        // 俯瞰カット: 真上近くから隊列を見下ろす
+        const above = trackFrame(packP - 0.03);
+        camera.position.copy(above.pos).addScaledVector(above.up, 46);
+        lookTarget.copy(trackFrame(packP + 0.02).pos);
+        break;
+      }
+      case 'side': {
+        // 並走カット: コースの外から横顔を撮る
+        const beside = trackFrame(packP + 0.03);
+        camera.position
+          .copy(beside.pos)
+          .addScaledVector(beside.right, 36)
+          .addScaledVector(beside.up, 6);
+        lookTarget.copy(trackFrame(packP - 0.005).pos);
+        fov = 50;
+        break;
+      }
+      case 'finalCorner': {
+        // 最終コーナー: 先頭の前に回り込み、迫ってくる集団を望遠で撮る（スロー感）
+        const ahead = trackFrame(leadP + 0.045);
+        camera.position
+          .copy(ahead.pos)
+          .addScaledVector(ahead.up, 3.5)
+          .addScaledVector(ahead.right, 9);
+        lookTarget.copy(trackFrame(packP + 0.01).pos);
+        fov = 40;
+        break;
+      }
+      case 'goal': {
+        // ゴールカット: ゲートの先で待ち構える
+        const beyond = trackFrame(1.045);
+        camera.position
+          .copy(beyond.pos)
+          .addScaledVector(beyond.up, 4.5)
+          .addScaledVector(beyond.right, 13);
+        lookTarget.copy(trackFrame(0.985).pos);
+        fov = 52;
+        break;
+      }
+      case 'pullback': {
+        // 引き: ゲートから空へ（花火へつなぐ）
+        const k = Math.min(1, t - 26);
+        const beyond = trackFrame(1.045 - k * 0.1);
+        camera.position
+          .copy(beyond.pos)
+          .addScaledVector(beyond.up, 4.5)
+          .addScaledVector(beyond.right, 13 * (1 - k));
+        const gate = trackFrame(1 + k * 0.02);
+        lookTarget.copy(gate.pos).addScaledVector(gate.up, k * 30);
+        break;
+      }
+    }
+
+    if (camera.fov !== fov) {
+      camera.fov = cut ? fov : camera.fov + (fov - camera.fov) * Math.min(1, dt * 3);
+      camera.updateProjectionMatrix();
+    }
+    if (attackPull > 0.001) lookTarget.lerp(attackFocus, attackPull);
+    camera.lookAt(lookTarget);
+
+    // イベント発生時の画面揺れ
+    shake = Math.max(0, shake - dt * 3);
+    if (shake > 0 && !stage.reducedMotion) {
+      camera.position.x += (Math.random() - 0.5) * shake * 0.7;
+      camera.position.y += (Math.random() - 0.5) * shake * 0.7;
+    }
+  }
+
+  function finish(skipped: boolean) {
+    if (done) return;
+    done = true;
+    stop();
+    rockets.dispose();
+    attacks.dispose();
+    stage.camera.fov = BASE_FOV;
+    stage.camera.updateProjectionMatrix();
+    hooks.onEnd?.(skipped);
+    onDone();
+  }
+
+  const stop = stage.onFrame((dt) => {
+    const t = clock.elapsed();
+    fireHooks(t);
+    hud.setCountdown(countdownText(t));
+    if (rankingVisibleAt(t) && t - rankingAt_ >= RANKING_INTERVAL) {
+      rankingAt_ = t;
+      hud.setRanking(rankingAt(script, t).map((i) => script.racers[i]!));
+    }
+    hud.setTelop(activeCue(cues, t));
+    const { avg, lead } = placeRockets(t);
+    placeAttacks(t, dt);
+    placeCamera(t, dt, avg, lead);
+    prevT = t;
+    if (clock.finished()) finish(false);
+  });
+
+  return {
+    skip() {
+      finish(true);
+    },
+  };
+}

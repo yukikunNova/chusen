@@ -1,0 +1,134 @@
+import { describe, expect, it } from 'vitest';
+import type { RaceScript } from '../domain/race-script';
+import {
+  ATTACK_FLIGHT,
+  activeCue,
+  attackFlight,
+  eventFx,
+  hookDue,
+  rankingVisibleAt,
+  shotAt,
+} from './direction';
+
+describe('activeCue', () => {
+  const cues = [
+    { t: 3, text: 'A' },
+    { t: 8, text: 'B' },
+  ];
+  it('開始から 2.4 秒だけ表示する', () => {
+    expect(activeCue(cues, 2.9)).toBeNull();
+    expect(activeCue(cues, 3)).toBe('A');
+    expect(activeCue(cues, 5.3)).toBe('A');
+    expect(activeCue(cues, 5.5)).toBeNull();
+    expect(activeCue(cues, 8)).toBe('B');
+  });
+  it('次のキューが始まれば切り替える', () => {
+    const close = [
+      { t: 3, text: 'A' },
+      { t: 4.5, text: 'B' },
+    ];
+    expect(activeCue(close, 4.4)).toBe('A');
+    expect(activeCue(close, 4.6)).toBe('B');
+  });
+  it('キューが無ければ null', () => {
+    expect(activeCue([], 5)).toBeNull();
+  });
+});
+
+describe('shotAt', () => {
+  it.each([
+    [0, 'lineup'],
+    [2.99, 'lineup'],
+    [3, 'chase'],
+    [10, 'overhead'],
+    [14, 'side'],
+    [17, 'chase'],
+    [20, 'finalCorner'],
+    [24, 'goal'],
+    [26.5, 'pullback'],
+  ] as const)('%f 秒は %s', (t, shot) => {
+    expect(shotAt(t)).toBe(shot);
+  });
+});
+
+describe('eventFx', () => {
+  const script = (kind: RaceScript['events'][number]['kind']): RaceScript => ({
+    racers: [],
+    events: [{ t: 6, kind, racer: 2 }],
+  });
+  it('spin はイベント時刻から 1.5 秒かけて 1→0 に減衰する', () => {
+    const s = script('spin');
+    expect(eventFx(s, 2, 5.9)).toEqual({ spin: 0, boost: 0, sway: 0 });
+    expect(eventFx(s, 2, 6).spin).toBe(1);
+    expect(eventFx(s, 2, 6.75).spin).toBeCloseTo(0.5, 9);
+    expect(eventFx(s, 2, 7.6).spin).toBe(0);
+  });
+  it('対象外の機体には掛からない', () => {
+    expect(eventFx(script('spin'), 1, 6.2)).toEqual({ spin: 0, boost: 0, sway: 0 });
+  });
+  it.each([
+    ['boost', 'boost'],
+    ['rocketStart', 'boost'],
+    ['overtake', 'boost'],
+    ['finalComeback', 'boost'],
+    ['weave', 'sway'],
+    ['stall', 'sway'],
+    ['slowStart', 'sway'],
+    ['spin', 'spin'],
+    ['attack', 'spin'],
+  ] as const)('%s は %s に効く', (kind, channel) => {
+    const fx = eventFx(script(kind), 2, 6);
+    expect(fx[channel]).toBe(1);
+    expect(fx.spin + fx.boost + fx.sway).toBe(1);
+  });
+  it('重なったイベントは強い方を採る', () => {
+    const s: RaceScript = {
+      racers: [],
+      events: [
+        { t: 6, kind: 'boost', racer: 0 },
+        { t: 6.75, kind: 'boost', racer: 0 },
+      ],
+    };
+    expect(eventFx(s, 0, 6.75).boost).toBe(1);
+  });
+});
+
+describe('attackFlight', () => {
+  const attack = { t: 10, kind: 'attack', racer: 1, from: 0, item: 'missile' } as const;
+  it('着弾の 0.9 秒前から飛び始め、着弾で終わる', () => {
+    expect(ATTACK_FLIGHT).toBe(0.9);
+    expect(attackFlight(attack, 9.05)).toBeNull();
+    expect(attackFlight(attack, 9.1)).toBeCloseTo(0, 9);
+    expect(attackFlight(attack, 9.55)).toBeCloseTo(0.5, 9);
+    expect(attackFlight(attack, 10)).toBeNull();
+  });
+  it('攻撃以外のイベントは null', () => {
+    expect(attackFlight({ t: 10, kind: 'boost', racer: 1 }, 9.5)).toBeNull();
+  });
+});
+
+describe('hookDue', () => {
+  it('その時刻をまたいだ最初のフレームで true', () => {
+    expect(hookDue(4.99, 5.01, 5)).toBe(true);
+    expect(hookDue(5.01, 5.03, 5)).toBe(false);
+    expect(hookDue(4.9, 4.95, 5)).toBe(false);
+  });
+  it('0.5 秒以上遅れてまたいだ分は鳴らさない（タブ復帰時に音が重ならない）', () => {
+    expect(hookDue(2, 5.49, 5)).toBe(true);
+    expect(hookDue(2, 5.5, 5)).toBe(false);
+    expect(hookDue(-1, 27, 5)).toBe(false);
+  });
+  it('開始フレーム（前回 -1）でも時刻 0 のフックは出る', () => {
+    expect(hookDue(-1, 0.016, 0)).toBe(true);
+  });
+});
+
+describe('rankingVisibleAt', () => {
+  it('スタート直後まで暫定順位を出さない（全員同着のあいだは添字順＝最終順位が見えてしまう）', () => {
+    expect(rankingVisibleAt(0)).toBe(false);
+    expect(rankingVisibleAt(3)).toBe(false);
+    expect(rankingVisibleAt(3.79)).toBe(false);
+    expect(rankingVisibleAt(3.8)).toBe(true);
+    expect(rankingVisibleAt(26)).toBe(true);
+  });
+});
