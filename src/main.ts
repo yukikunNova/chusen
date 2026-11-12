@@ -65,6 +65,7 @@ const EVENT_SOUND: Record<RaceEventKind, SfxKind> = {
   weave: 'stall',
   stall: 'stall',
   attack: 'attack',
+  surge: 'boost',
 };
 /** 一斉打ち上げで炸裂音が重なりすぎないよう、間隔を空ける（ミリ秒）。 */
 const FIREWORK_SOUND_GAP = 90;

@@ -41,6 +41,7 @@ const CHANNEL: Record<RaceEventKind, Channel> = {
   rocketStart: 'boost',
   overtake: 'boost',
   finalComeback: 'boost',
+  surge: 'boost',
   weave: 'sway',
   stall: 'sway',
   slowStart: 'sway',
