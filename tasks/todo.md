@@ -12,4 +12,4 @@
 - [x] Task 8: 花火・紙吹雪・発光効果
 - [x] Task 9: 効果音・BGM・ミュート
 - [x] Task 10: WebGL 不可時の簡易演出と視差軽減対応
-- [ ] Task 11: 通し確認と GitHub Pages 公開
+- [x] Task 11（公開は承認待ち）: 通し確認と GitHub Pages 公開

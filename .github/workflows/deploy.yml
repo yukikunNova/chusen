@@ -1,0 +1,51 @@
+# main への push で検証・ビルドし、GitHub Pages に公開する
+name: GitHub Pages に公開
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 公開は 1 本ずつ。進行中の公開は最後まで走らせる
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Node.js を用意
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - name: 依存を入れる
+        run: npm ci
+      - name: 書式を確認
+        run: npm run format:check
+      - name: 型を確認
+        run: npm run typecheck
+      - name: テスト
+        run: npm test
+      - name: ビルド
+        run: npm run build
+      - name: Pages を設定
+        uses: actions/configure-pages@v5
+      - name: 成果物をアップロード
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+      - name: 公開
+        id: deployment
+        uses: actions/deploy-pages@v5
