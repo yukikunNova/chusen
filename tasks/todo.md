@@ -1,4 +1,4 @@
-# 銀河グランプリ 実装チェックリスト
+# ドパ抽 実装チェックリスト
 
 計画: `docs/superpowers/plans/2026-11-12-chusen.md`
 
