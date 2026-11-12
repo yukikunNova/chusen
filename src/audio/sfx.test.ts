@@ -7,6 +7,8 @@ function fakeAudio() {
   /** つないだ順の記録（[元, 先]）。 */
   const links: [unknown, unknown][] = [];
   const destination = {};
+  /** 音源の開始時刻（予約した順）。 */
+  const starts: number[] = [];
   /** 作られた順のノード。最初の 1 つが全体音量。 */
   const created: { gain: { value: number } }[] = [];
   const param = () => ({
@@ -32,7 +34,7 @@ function fakeAudio() {
       ratio: param(),
       delayTime: param(),
       disconnect: () => undefined,
-      start: () => undefined,
+      start: (at?: number) => void starts.push(at ?? 0),
       stop: () => void stats.stops++,
     };
     created.push(made);
@@ -77,7 +79,7 @@ function fakeAudio() {
     }
     return false;
   };
-  return { stats, createContext, created, links, destination, reaches };
+  return { stats, createContext, created, links, destination, reaches, starts };
 }
 
 const KINDS: SfxKind[] = [
@@ -90,6 +92,11 @@ const KINDS: SfxKind[] = [
   'goal',
   'firework',
   'fanfare',
+  'overtake',
+  'combo',
+  'box',
+  'rare',
+  'fever',
 ];
 
 describe('createSfx', () => {
@@ -220,5 +227,42 @@ describe('createSfx', () => {
     const before = stats.nodes;
     for (const kind of KINDS) sfx.play(kind);
     expect(stats.nodes).toBeGreaterThan(before);
+  });
+  it('速い BGM は、同じ音数を短い時間に詰めて予約する', () => {
+    const span = (fast: boolean) => {
+      const { createContext, starts } = fakeAudio();
+      const sfx = createSfx(() => createContext(), false);
+      sfx.unlock();
+      const before = starts.length;
+      sfx.startBgm(fast);
+      const times = starts.slice(before);
+      return { count: times.length, last: Math.max(...times) };
+    };
+    const normal = span(false);
+    const fast = span(true);
+    expect(fast.count).toBe(normal.count);
+    expect(fast.last).toBeLessThan(normal.last * 0.8);
+  });
+  it('コンボ音は回数が増えるほど高くなる', () => {
+    const pitch = (level: number) => {
+      const { createContext, created } = fakeAudio();
+      const seen: number[] = [];
+      const context = createContext();
+      const makeOsc = context.createOscillator.bind(context);
+      context.createOscillator = () => {
+        const osc = makeOsc();
+        osc.frequency.setValueAtTime = ((value: number) => {
+          seen.push(value);
+          return osc.frequency;
+        }) as typeof osc.frequency.setValueAtTime;
+        return osc;
+      };
+      const sfx = createSfx(() => context, false);
+      sfx.unlock();
+      sfx.play('combo', level);
+      void created;
+      return Math.max(...seen);
+    };
+    expect(pitch(6)).toBeGreaterThan(pitch(2));
   });
 });
