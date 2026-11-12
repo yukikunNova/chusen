@@ -14,8 +14,8 @@ import { ATTACK_FLIGHT } from './direction';
  * すべて台本から開始時に 1 回だけ計算する。見た目だけで、順位には関係しない。three に依存しない。
  */
 
-/** 追い抜きを数え始める時刻。暫定順位が出てから 1 秒後（それより前は全員が横並び）。 */
-const OVERTAKE_FROM = 4.8;
+/** 追い抜きを数え始める時刻。スタート直後は差がほとんどなく、抜いた実感がないので少し待つ。 */
+const OVERTAKE_FROM = 6.5;
 const OVERTAKE_STEP = 0.25;
 /** 何秒前の順位と比べるか。 */
 const OVERTAKE_WINDOW = 1;
@@ -118,6 +118,15 @@ export function buildBoxes(script: RaceScript): Box[] {
   for (const event of priority) add(event);
   for (const event of mid) if (!priority.includes(event)) add(event);
   return boxes.sort((a, b) => a.pickT - b.pickT);
+}
+
+/** ルーレットの結果を出しておく秒数。 */
+const ROULETTE_LINGER = 1.4;
+
+/** 時刻 t にルーレットを表示する箱。重なったら、あとから取ったほうを優先する。 */
+export function activeBox(boxes: readonly Box[], t: number): Box | null {
+  const box = boxes.findLast((b) => b.pickT <= t);
+  return box && t < box.revealT + ROULETTE_LINGER ? box : null;
 }
 
 export const FEVER_FROM = TIMELINE.finalCornerStart;

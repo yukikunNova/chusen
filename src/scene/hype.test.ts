@@ -2,7 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { createRand } from '../domain/prng';
 import { TIMELINE, buildRaceScript, type RaceScript } from '../domain/race-script';
 import { ATTACK_FLIGHT } from './direction';
-import { FEVER_FROM, buildBoxes, buildHighlights, buildOvertakes, isFever } from './hype';
+import {
+  FEVER_FROM,
+  activeBox,
+  buildBoxes,
+  buildHighlights,
+  buildOvertakes,
+  isFever,
+  type Box,
+} from './hype';
 
 const order = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `m${i}`, name: `人${i}` }));
 const SEEDS = Array.from({ length: 40 }, (_, i) => i + 1);
@@ -100,6 +108,30 @@ describe('buildBoxes', () => {
   });
   it('2 人以上のレースには箱が 1 個以上ある', () => {
     for (const script of scripts) expect(buildBoxes(script).length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe('activeBox', () => {
+  const box = (pickT: number, revealT: number): Box => ({
+    pickT,
+    revealT,
+    racer: 0,
+    result: 'boost',
+    rarity: 'gold',
+    label: 'ターボ',
+  });
+  const first = box(5, 6.2);
+  const second = box(7, 8.2);
+  it('取ってから、結果を出して 1.4 秒後まで表示する', () => {
+    expect(activeBox([first, second], 4.9)).toBeNull();
+    expect(activeBox([first, second], 5)).toBe(first);
+    expect(activeBox([first, second], 7.5)).toBe(second);
+    expect(activeBox([first, second], 9.59)).toBe(second);
+    expect(activeBox([first, second], 9.61)).toBeNull();
+  });
+  it('前の箱の結果を出している間に次の箱を取ったら、次の箱に切り替える', () => {
+    expect(activeBox([first, second], 7.2)).toBe(second);
+    expect(activeBox([first, second], 6.9)).toBe(first);
   });
 });
 

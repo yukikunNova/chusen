@@ -21,6 +21,7 @@ import {
 import {
   COMBO_WINDOW,
   FEVER_FROM,
+  activeBox,
   buildBoxes,
   buildHighlights,
   isFever,
@@ -60,8 +61,6 @@ const BASE_FOV = 58;
 /** 攻撃の着弾後もカメラが被弾機を気にし続ける秒数と、視線を寄せる割合。 */
 const ATTACK_LINGER = 0.7;
 const ATTACK_PULL = 0.55;
-/** ルーレットの結果を出しておく秒数。 */
-const ROULETTE_LINGER = 1.4;
 /** フィーバータイム中に広げる画角と、揺れ続ける強さ。 */
 const FEVER_FOV = 8;
 const FEVER_SHAKE = 0.3;
@@ -362,7 +361,7 @@ export function playRace(
     const last = highlights.findLast((h) => h.t <= t);
     if (last) hud.setScore(last.total);
     hud.setCombo(last && t - last.t <= COMBO_WINDOW ? last.combo : 0);
-    const box = boxes.find((b) => t >= b.pickT && t < b.revealT + ROULETTE_LINGER);
+    const box = activeBox(boxes, t);
     const name = box ? (script.racers[box.racer]?.name ?? '') : '';
     hud.setRoulette(
       !box ? null : t < box.revealT ? { name } : { name, label: box.label, rarity: box.rarity },
