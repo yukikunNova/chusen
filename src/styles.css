@@ -832,15 +832,15 @@ button:disabled {
   opacity: 0;
   background: repeating-conic-gradient(
     from 0deg,
-    rgb(255 255 255 / 0%) 0deg 5deg,
-    rgb(255 255 255 / 55%) 5deg 6deg
+    rgb(255 255 255 / 0%) 0deg 4deg,
+    rgb(255 255 255 / 95%) 4deg 6deg
   );
-  -webkit-mask-image: radial-gradient(circle, transparent 34%, #000 78%);
-  mask-image: radial-gradient(circle, transparent 34%, #000 78%);
+  -webkit-mask-image: radial-gradient(circle, transparent 30%, #000 62%);
+  mask-image: radial-gradient(circle, transparent 30%, #000 62%);
 }
 
 .hud.fever .hud-lines {
-  opacity: 0.5;
+  opacity: 0.85;
   animation: lines-spin 0.5s steps(6) infinite;
 }
 

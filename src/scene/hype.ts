@@ -144,7 +144,7 @@ export type Highlight = {
 };
 
 /** この秒数以内に次の見せ場が来ればコンボが続く。 */
-const COMBO_WINDOW = 3;
+export const COMBO_WINDOW = 3;
 const FEVER_MULTIPLIER = 10;
 const BASE_POINTS: Record<HighlightKind, number> = {
   overtake: 300,
