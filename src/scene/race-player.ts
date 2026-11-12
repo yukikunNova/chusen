@@ -8,7 +8,8 @@ import {
   type RaceScript,
 } from '../domain/race-script';
 import type { Hud } from '../ui/hud';
-import { activeCue, eventFx, shotAt, type Shot } from './direction';
+import { createAttacks } from './attacks';
+import { activeCue, attackFlight, eventFx, shotAt, type Shot } from './direction';
 import { laneOffset } from './layout';
 import { createRaceClock } from './race-clock';
 import { createRockets } from './rockets';
@@ -32,6 +33,9 @@ const RANKING_INTERVAL = 0.25;
 const OVERRUN_SPEED = 0.045;
 const OVERRUN_MAX = 1.09;
 const BASE_FOV = 58;
+/** 攻撃の着弾後もカメラが被弾機を気にし続ける秒数と、視線を寄せる割合。 */
+const ATTACK_LINGER = 0.7;
+const ATTACK_PULL = 0.55;
 
 function countdownText(t: number): string | null {
   if (t < 1) return '3';
@@ -76,6 +80,7 @@ export function playRace(
     stage,
     script.racers.map((r) => r.name),
   );
+  const attacks = createAttacks(stage);
   const clock = createRaceClock(() => performance.now(), TIMELINE.duration);
   const lineupHalfWidth =
     Math.max(...script.racers.map((_, i) => Math.abs(laneOffset(i, count).x))) + 5;
@@ -88,6 +93,8 @@ export function playRace(
   let lastShot: Shot | null = null;
   let shake = 0;
   const lookTarget = new THREE.Vector3();
+  let attackPull = 0;
+  const attackFocus = new THREE.Vector3();
   const crossed = (time: number, t: number) => prevT < time && t >= time;
 
   function fireHooks(t: number) {
@@ -98,6 +105,10 @@ export function playRace(
     for (const event of script.events) {
       if (!crossed(event.t, t)) continue;
       shake = 1;
+      if (event.kind === 'attack' && event.item) {
+        shake = 1.8;
+        attacks.explode(event.item, rockets.positionOf(event.racer));
+      }
       hooks.onEvent?.(event);
     }
     const winner = script.racers[0];
@@ -121,6 +132,28 @@ export function playRace(
       lead = Math.max(lead, p);
     });
     return { avg: count > 0 ? sum / count : 0, lead };
+  }
+
+  /** 飛んでいる攻撃アイテムを、攻撃した機体から被弾する機体へ運ぶ。 */
+  function placeAttacks(t: number, dt: number) {
+    let flying = false;
+    let watching = false;
+    for (const event of script.events) {
+      if (event.kind !== 'attack' || event.from === undefined || !event.item) continue;
+      const to = rockets.positionOf(event.racer);
+      const k = attackFlight(event, t);
+      if (k !== null) {
+        attacks.fly(event.item, rockets.positionOf(event.from), to, k);
+        flying = true;
+      }
+      if (k !== null || (t >= event.t && t < event.t + ATTACK_LINGER)) {
+        attackFocus.copy(to);
+        watching = true;
+      }
+    }
+    if (!flying) attacks.hide();
+    // カメラの視線を被弾機へ寄せる強さ。急に振らないよう、なめらかに増減させる
+    attackPull += ((watching ? ATTACK_PULL : 0) - attackPull) * Math.min(1, dt * 5);
   }
 
   function placeCamera(t: number, dt: number, avg: number, lead: number) {
@@ -212,6 +245,7 @@ export function playRace(
       camera.fov = cut ? fov : camera.fov + (fov - camera.fov) * Math.min(1, dt * 3);
       camera.updateProjectionMatrix();
     }
+    if (attackPull > 0.001) lookTarget.lerp(attackFocus, attackPull);
     camera.lookAt(lookTarget);
 
     // イベント発生時の画面揺れ
@@ -227,6 +261,7 @@ export function playRace(
     done = true;
     stop();
     rockets.dispose();
+    attacks.dispose();
     stage.camera.fov = BASE_FOV;
     stage.camera.updateProjectionMatrix();
     hooks.onEnd?.(skipped);
@@ -243,6 +278,7 @@ export function playRace(
     }
     hud.setTelop(activeCue(cues, t));
     const { avg, lead } = placeRockets(t);
+    placeAttacks(t, dt);
     placeCamera(t, dt, avg, lead);
     prevT = t;
     if (clock.finished()) finish(false);

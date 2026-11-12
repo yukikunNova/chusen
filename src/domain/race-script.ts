@@ -10,9 +10,28 @@ export const TIMELINE = {
 } as const;
 
 export type RaceEventKind =
-  'slowStart' | 'rocketStart' | 'boost' | 'spin' | 'weave' | 'stall' | 'overtake' | 'finalComeback';
-/** racer は最終順位の添字（0 が 1 着）。 */
-export type RaceEvent = { t: number; kind: RaceEventKind; racer: number };
+  | 'slowStart'
+  | 'rocketStart'
+  | 'boost'
+  | 'spin'
+  | 'weave'
+  | 'stall'
+  | 'overtake'
+  | 'attack'
+  | 'finalComeback';
+/** 攻撃アイテム。missile: 一直線、bomb: 山なり、thunder: 上空から。 */
+export type AttackItem = 'missile' | 'bomb' | 'thunder';
+/**
+ * racer は最終順位の添字（0 が 1 着）。
+ * kind が 'attack' のときだけ from（攻撃した機体）と item が付き、racer は被弾した機体。
+ */
+export type RaceEvent = {
+  t: number;
+  kind: RaceEventKind;
+  racer: number;
+  from?: number;
+  item?: AttackItem;
+};
 /** p: 0 = スタート線、1 = ゴール線。 */
 export type Key = { t: number; p: number };
 export type Racer = { id: string; name: string; finishTime: number; keys: Key[] };
@@ -27,9 +46,10 @@ const COMEBACK_TIME = 20;
 const COMEBACK_KEY_TIME = 21;
 const MAX_FINISH_GAP = 0.6;
 const KEY_TIMES = [3, 7, 11, 15, 19] as const;
-const MID_KINDS = ['boost', 'spin', 'weave', 'stall', 'overtake'] as const;
+const MID_KINDS = ['boost', 'spin', 'weave', 'stall', 'overtake', 'attack'] as const;
+const ATTACK_ITEMS = ['missile', 'bomb', 'thunder'] as const;
 const FAST: readonly RaceEventKind[] = ['rocketStart', 'boost', 'overtake'];
-const SLOW: readonly RaceEventKind[] = ['slowStart', 'spin', 'stall'];
+const SLOW: readonly RaceEventKind[] = ['slowStart', 'spin', 'stall', 'attack'];
 
 function randInt(rand: Rand, maxExclusive: number): number {
   return Math.min(maxExclusive - 1, Math.floor(rand() * maxExclusive));
@@ -65,17 +85,29 @@ function buildEvents(n: number, rand: Rand): RaceEvent[] {
   const offsets = Array.from({ length: count }, () => rand() * slack).sort((a, b) => a - b);
   // 対象が偏らないよう、並べ替えた機体を順に割り当てる
   let pool: number[] = [];
+  // 攻撃は相手が要る。2 人以上なら毎レース最低 1 回は起こす
+  const canAttack = n >= 2;
+  const forcedAttack = canAttack ? randInt(rand, count) : -1;
   for (let i = 0; i < count; i++) {
-    if (pool.length === 0)
+    if (pool.length === 0) {
       pool = shuffled(
         Array.from({ length: n }, (_, k) => k),
         rand,
       );
-    events.push({
-      t: MID_START + i * MID_GAP + offsets[i]!,
-      kind: MID_KINDS[randInt(rand, MID_KINDS.length)]!,
-      racer: pool.pop()!,
-    });
+    }
+    const t = MID_START + i * MID_GAP + offsets[i]!;
+    const racer = pool.pop()!;
+    let kind: RaceEventKind = MID_KINDS[randInt(rand, MID_KINDS.length)]!;
+    if (i === forcedAttack) kind = 'attack';
+    else if (kind === 'attack' && !canAttack) kind = 'spin';
+    if (kind === 'attack') {
+      // 被弾者以外から攻撃者を選ぶ
+      const from = (racer + 1 + randInt(rand, n - 1)) % n;
+      const item = ATTACK_ITEMS[randInt(rand, ATTACK_ITEMS.length)]!;
+      events.push({ t, kind, racer, from, item });
+    } else {
+      events.push({ t, kind, racer });
+    }
   }
 
   if (n >= 3) events.push({ t: COMEBACK_TIME, kind: 'finalComeback', racer: 0 });

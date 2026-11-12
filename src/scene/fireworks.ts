@@ -15,6 +15,8 @@ export type Fireworks = {
   start(): void;
   /** 打ち上げを止める（空中の花火は消えるまで残る）。 */
   stop(): void;
+  /** 大玉を一斉に打ち上げる。 */
+  salvo(): void;
   burstConfetti(): void;
   dispose(): void;
 };
@@ -25,11 +27,16 @@ type Shell = {
   fuse: number;
   color: THREE.Color;
   kind: 'sphere' | 'ring' | 'willow';
+  /** 大玉。粒が多く、大きく開く。 */
+  big: boolean;
   trailDebt: number;
 };
 
 const GRAVITY = 14;
 const CONFETTI_COUNT = 520;
+/** 開幕の一斉打ち上げの数と、通常打ち上げで大玉になる割合。 */
+const SALVO = 6;
+const BIG_RATE = 0.3;
 const CONFETTI_COLORS = [0xff2e93, 0x29e0ff, 0xffd60a, 0x9d4dff, 0x4dff88, 0xffffff];
 
 export function createFireworks(stage: Stage, onBurst?: () => void): Fireworks {
@@ -47,7 +54,7 @@ export function createFireworks(stage: Stage, onBurst?: () => void): Fireworks {
   geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
   const sprite = glowTexture();
   const material = new THREE.PointsMaterial({
-    size: 12,
+    size: 14,
     map: sprite,
     vertexColors: true,
     transparent: true,
@@ -116,15 +123,16 @@ export function createFireworks(stage: Stage, onBurst?: () => void): Fireworks {
     fall[i] = gravityScale;
   }
 
-  function launch() {
+  function launch(big = Math.random() < BIG_RATE) {
     // カメラの前方、左右に散らした位置から打ち上げる
     stage.camera.getWorldDirection(forward);
     forward.y = 0;
     if (forward.lengthSq() < 1e-6) forward.set(0, 0, -1);
     forward.normalize();
     side.set(-forward.z, 0, forward.x);
-    const distance = 110 + Math.random() * 170;
-    const lateral = (Math.random() - 0.5) * distance * 1.35;
+    // 大玉は手前に上げて画面いっぱいに開かせる
+    const distance = big ? 90 + Math.random() * 70 : 100 + Math.random() * 160;
+    const lateral = (Math.random() - 0.5) * distance * (big ? 0.9 : 1.35);
     const pos = stage.camera.position
       .clone()
       .addScaledVector(forward, distance)
@@ -139,13 +147,17 @@ export function createFireworks(stage: Stage, onBurst?: () => void): Fireworks {
       fuse,
       color: new THREE.Color().setHSL(Math.random(), 1, 0.6),
       kind: kinds[Math.floor(Math.random() * kinds.length)]!,
+      big,
       trailDebt: 0,
     });
   }
 
   function burst(shell: Shell) {
-    const count = 170 + Math.floor(Math.random() * 150);
-    const speed = 38 + Math.random() * 26;
+    const count = shell.big
+      ? 520 + Math.floor(Math.random() * 160)
+      : 200 + Math.floor(Math.random() * 150);
+    const speed = shell.big ? 78 + Math.random() * 24 : 42 + Math.random() * 26;
+    const long = shell.big ? 1.5 : 1;
     const second = new THREE.Color().setHSL(Math.random(), 1, 0.62);
     // リング花火の向き
     const tilt = new THREE.Euler(Math.random() * Math.PI, Math.random() * Math.PI, 0);
@@ -164,7 +176,8 @@ export function createFireworks(stage: Stage, onBurst?: () => void): Fireworks {
       tmp
         .copy(n % 3 === 0 ? second : shell.color)
         .lerp(white, Math.random() * 0.2)
-        .multiplyScalar(0.8);
+        // 大玉は粒が重なって白飛びしやすいので暗めにする
+        .multiplyScalar(shell.big ? 0.5 : 0.8);
       if (shell.kind === 'willow') {
         spawn(
           shell.pos,
@@ -172,23 +185,36 @@ export function createFireworks(stage: Stage, onBurst?: () => void): Fireworks {
           dir.y * v * 0.6,
           dir.z * v * 0.6,
           tmp,
-          2.6 + Math.random() * 0.9,
+          (2.6 + Math.random() * 0.9) * long,
           1.1,
           1.5,
         );
       } else {
-        spawn(shell.pos, dir.x * v, dir.y * v, dir.z * v, tmp, 1.5 + Math.random() * 0.9, 1.7, 1);
+        const seconds = (1.5 + Math.random() * 0.9) * long;
+        spawn(shell.pos, dir.x * v, dir.y * v, dir.z * v, tmp, seconds, 1.7, 1);
+      }
+    }
+    if (shell.big) {
+      // 大玉は芯にもう 1 色の小さい玉を重ねる
+      tmp.copy(second).lerp(white, 0.35).multiplyScalar(0.5);
+      for (let n = 0; n < 140; n++) {
+        const u = Math.random() * 2 - 1;
+        const a = Math.random() * Math.PI * 2;
+        const s = Math.sqrt(1 - u * u);
+        const v = speed * 0.38;
+        spawn(shell.pos, s * Math.cos(a) * v, u * v, s * Math.sin(a) * v, tmp, 2.2, 1.7, 0.6);
       }
     }
     // 中心の閃光
-    for (let n = 0; n < 14; n++) {
+    const flash = shell.big ? 20 : 6;
+    for (let n = 0; n < (shell.big ? 22 : 14); n++) {
       spawn(
         shell.pos,
-        (Math.random() - 0.5) * 6,
-        (Math.random() - 0.5) * 6,
-        (Math.random() - 0.5) * 6,
+        (Math.random() - 0.5) * flash,
+        (Math.random() - 0.5) * flash,
+        (Math.random() - 0.5) * flash,
         white,
-        0.35,
+        shell.big ? 0.5 : 0.35,
         3,
         0,
       );
@@ -301,6 +327,9 @@ export function createFireworks(stage: Stage, onBurst?: () => void): Fireworks {
     },
     stop() {
       running = false;
+    },
+    salvo() {
+      for (let n = 0; n < SALVO; n++) launch(true);
     },
     burstConfetti() {
       resetConfetti();

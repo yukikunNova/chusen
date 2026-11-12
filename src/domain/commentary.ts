@@ -1,12 +1,19 @@
 import type { Rand } from './prng';
-import type { RaceEventKind, RaceScript } from './race-script';
+import type { AttackItem, RaceEventKind, RaceScript } from './race-script';
 
 export type CommentaryKind = RaceEventKind | 'start' | 'finish';
 export type Cue = { t: number; text: string };
 
 const START_TIME = 0.5;
 
-/** 実況文。'{name}' を名前に置き換える。 */
+/** 攻撃アイテムの表示名。 */
+export const ITEM_NAMES: Record<AttackItem, string> = {
+  missile: '仕様変更ミサイル',
+  bomb: '長文メール爆弾',
+  thunder: '差し戻しサンダー',
+};
+
+/** 実況文。'{name}' を名前（攻撃では被弾者）に、'{from}' を攻撃者に、'{item}' をアイテム名に置き換える。 */
 export const TEMPLATES: Record<CommentaryKind, readonly string[]> = {
   start: [
     '全宇宙が見守る中、発表順を賭けた戦いが今始まる！',
@@ -56,6 +63,12 @@ export const TEMPLATES: Record<CommentaryKind, readonly string[]> = {
     '{name}、鮮やかな追い抜き！ 根回しが効いている！',
     '{name}、するすると順位を上げる！',
   ],
+  attack: [
+    '{from}の{item}が{name}に直撃！ 容赦がない！',
+    '{from}、{item}を発射！ {name}が吹き飛んだ！',
+    '{name}、{from}の{item}を食らってスピン！',
+    'なんと{from}が{item}！ 狙われたのは{name}だ！',
+  ],
   finalComeback: [
     '最終コーナー、{name}が来た！ {name}が来たァ！',
     '大外から{name}！ とんでもない末脚だ！',
@@ -70,21 +83,31 @@ export const TEMPLATES: Record<CommentaryKind, readonly string[]> = {
   ],
 };
 
-function line(kind: CommentaryKind, name: string, rand: Rand): string {
+type LineValues = { name: string; from?: string; item?: string };
+
+function line(kind: CommentaryKind, values: LineValues, rand: Rand): string {
   const options = TEMPLATES[kind];
   const template = options[Math.min(options.length - 1, Math.floor(rand() * options.length))]!;
-  // split/join なら名前に含まれる '$&' や '{name}' を解釈しない
-  return template.split('{name}').join(name);
+  // 関数で 1 回だけ置き換える。名前に含まれる '$&' や '{name}' は解釈しない
+  return template.replace(
+    /\{(name|from|item)\}/g,
+    (_match, key: keyof LineValues) => values[key] ?? '',
+  );
 }
 
 /** 台本から実況キューを作る。開幕 1 本 + イベントごとに 1 本 + ゴール 1 本。 */
 export function buildCommentary(script: RaceScript, rand: Rand): Cue[] {
   const nameOf = (racer: number) => script.racers[racer]?.name ?? '';
-  const cues: Cue[] = [{ t: START_TIME, text: line('start', '', rand) }];
+  const cues: Cue[] = [{ t: START_TIME, text: line('start', { name: '' }, rand) }];
   for (const event of script.events) {
-    cues.push({ t: event.t, text: line(event.kind, nameOf(event.racer), rand) });
+    const values: LineValues = { name: nameOf(event.racer) };
+    if (event.from !== undefined) values.from = nameOf(event.from);
+    if (event.item !== undefined) values.item = ITEM_NAMES[event.item];
+    cues.push({ t: event.t, text: line(event.kind, values, rand) });
   }
   const winner = script.racers[0];
-  if (winner) cues.push({ t: winner.finishTime, text: line('finish', winner.name, rand) });
+  if (winner) {
+    cues.push({ t: winner.finishTime, text: line('finish', { name: winner.name }, rand) });
+  }
   return cues;
 }

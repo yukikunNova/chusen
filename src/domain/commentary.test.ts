@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { TEMPLATES, buildCommentary, type CommentaryKind } from './commentary';
+import { ITEM_NAMES, TEMPLATES, buildCommentary, type CommentaryKind } from './commentary';
 import { createRand } from './prng';
 import { buildRaceScript } from './race-script';
 
@@ -11,6 +11,7 @@ describe('TEMPLATES', () => {
     const kinds = Object.keys(TEMPLATES) as CommentaryKind[];
     expect(kinds.sort()).toEqual(
       [
+        'attack',
         'boost',
         'finalComeback',
         'finish',
@@ -64,6 +65,32 @@ describe('buildCommentary', () => {
     expect(cues.at(-1)!.text).toContain('人0');
     const comeback = cues.find((c) => c.t === 20)!;
     expect(comeback.text).toContain('人0');
+  });
+  it('攻撃の実況には攻撃者・被弾者・アイテム名が入る', () => {
+    for (const seed of SEEDS) {
+      const script = buildRaceScript(order(5), createRand(seed));
+      const cues = buildCommentary(script, createRand(seed + 7));
+      script.events.forEach((event, i) => {
+        if (event.kind !== 'attack') return;
+        const text = cues[i + 1]!.text;
+        expect(text).toContain(script.racers[event.racer]!.name);
+        expect(text).toContain(script.racers[event.from!]!.name);
+        expect(text).toContain(ITEM_NAMES[event.item!]);
+        expect(text).not.toContain('{from}');
+        expect(text).not.toContain('{item}');
+      });
+    }
+  });
+  it('攻撃テンプレートは {from} と {item} を含む', () => {
+    for (const line of TEMPLATES.attack) {
+      expect(line).toContain('{from}');
+      expect(line).toContain('{item}');
+    }
+    expect(ITEM_NAMES).toEqual({
+      missile: '仕様変更ミサイル',
+      bomb: '長文メール爆弾',
+      thunder: '差し戻しサンダー',
+    });
   });
   it('名前は加工せずそのまま入れる', () => {
     const script = buildRaceScript(

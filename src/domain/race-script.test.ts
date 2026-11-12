@@ -115,8 +115,39 @@ describe('buildRaceScript', () => {
       for (const e of events.slice(1, n >= 3 ? -1 : undefined)) {
         expect(e.t).toBeGreaterThanOrEqual(5.1);
         expect(e.t).toBeLessThanOrEqual(18);
-        expect(['boost', 'spin', 'weave', 'stall', 'overtake']).toContain(e.kind);
+        expect(['boost', 'spin', 'weave', 'stall', 'overtake', 'attack']).toContain(e.kind);
       }
+    }
+  });
+  it('2 人以上なら攻撃が最低 1 回あり、攻撃者は被弾者と別の機体', () => {
+    for (const { n, seed } of cases) {
+      const { events } = build(n, seed);
+      const attacks = events.filter((e) => e.kind === 'attack');
+      expect(attacks.length).toBeGreaterThanOrEqual(1);
+      for (const e of attacks) {
+        expect(Number.isInteger(e.from) && e.from! >= 0 && e.from! < n).toBe(true);
+        expect(e.from).not.toBe(e.racer);
+        expect(['missile', 'bomb', 'thunder']).toContain(e.item);
+      }
+      for (const e of events.filter((x) => x.kind !== 'attack')) {
+        expect(e.from).toBeUndefined();
+        expect(e.item).toBeUndefined();
+      }
+    }
+  });
+  it('攻撃アイテムは 3 種類とも出る', () => {
+    const items = new Set(
+      SEEDS.flatMap((seed) =>
+        build(5, seed)
+          .events.map((e) => e.item)
+          .filter(Boolean),
+      ),
+    );
+    expect([...items].sort()).toEqual(['bomb', 'missile', 'thunder']);
+  });
+  it('1 人のときは攻撃なし', () => {
+    for (const seed of SEEDS) {
+      expect(build(1, seed).events.some((e) => e.kind === 'attack')).toBe(false);
     }
   });
   it('1 人でも壊れない', () => {

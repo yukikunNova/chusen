@@ -1,5 +1,5 @@
 import type { Cue } from '../domain/commentary';
-import type { RaceEventKind, RaceScript } from '../domain/race-script';
+import type { RaceEvent, RaceEventKind, RaceScript } from '../domain/race-script';
 
 /** 演出の時間割（どの実況を出すか、どのカメラか、機体にどの効果を掛けるか）。three に依存しない。 */
 
@@ -36,6 +36,7 @@ export function shotAt(t: number): Shot {
 type Channel = 'spin' | 'boost' | 'sway';
 const CHANNEL: Record<RaceEventKind, Channel> = {
   spin: 'spin',
+  attack: 'spin',
   boost: 'boost',
   rocketStart: 'boost',
   overtake: 'boost',
@@ -60,4 +61,14 @@ export function eventFx(
     fx[channel] = Math.max(fx[channel], 1 - age / FX_DURATION);
   }
   return fx;
+}
+
+/** 攻撃アイテムが飛んでいる時間（秒）。着弾はイベント時刻。 */
+export const ATTACK_FLIGHT = 0.9;
+
+/** 攻撃アイテムの飛行の進み具合（0〜1）。飛んでいなければ null。 */
+export function attackFlight(event: RaceEvent, t: number): number | null {
+  if (event.kind !== 'attack') return null;
+  const k = (t - (event.t - ATTACK_FLIGHT)) / ATTACK_FLIGHT;
+  return k >= 0 && k < 1 ? k : null;
 }

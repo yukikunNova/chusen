@@ -101,3 +101,13 @@ export function labelTexture(
 
   return { texture: toTexture(canvas), aspect: width / height };
 }
+
+/** 絵文字 1 文字の板（攻撃アイテムの目印）。 */
+export function emojiTexture(emoji: string): THREE.CanvasTexture {
+  const { canvas, ctx } = canvas2d(128, 128);
+  ctx.font = "96px 'Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji',sans-serif";
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(emoji, 64, 70);
+  return toTexture(canvas);
+}

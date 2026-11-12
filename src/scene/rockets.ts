@@ -9,6 +9,8 @@ export type RocketFx = { spin: number; boost: number; sway: number };
 export type Rockets = {
   /** i 番目（台本の racer 添字）をコース上 p に置く。 */
   setState(i: number, p: number, fx: RocketFx): void;
+  /** i 番目の機体の現在位置（直前の setState の結果）。呼び出し側で書き換えないこと。 */
+  positionOf(i: number): THREE.Vector3;
   dispose(): void;
 };
 
@@ -240,6 +242,7 @@ export function createRockets(stage: Stage, names: readonly string[]): Rockets {
   stage.scene.add(group);
   stage.overlay.add(tags);
   const target = new THREE.Vector3();
+  const origin = new THREE.Vector3();
 
   return {
     setState(i, p, fx) {
@@ -278,6 +281,9 @@ export function createRockets(stage: Stage, names: readonly string[]): Rockets {
       rocket.tag.position
         .copy(rocket.body.position)
         .addScaledVector(frame.up, tagSide * (1.5 + TAG_HEIGHT * zoom * 0.62));
+    },
+    positionOf(i) {
+      return rockets[i]?.body.position ?? origin;
     },
     dispose() {
       stop();

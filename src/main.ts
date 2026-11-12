@@ -50,6 +50,7 @@ let muted = false;
 const hooks: RaceHooks = {
   onFirstFinish: () => {
     fireworks?.start();
+    fireworks?.salvo();
     fireworks?.burstConfetti();
   },
 };
@@ -91,6 +92,7 @@ app = createApp({
     if (screen === 'result') {
       // スキップで来た場合もここで始まる（start は二重に呼んでも 1 系統）
       fireworks?.start();
+      fireworks?.salvo();
       fireworks?.burstConfetti();
     } else {
       fireworks?.stop();

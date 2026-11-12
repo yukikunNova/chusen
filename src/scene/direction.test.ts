@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { RaceScript } from '../domain/race-script';
-import { activeCue, eventFx, shotAt } from './direction';
+import { ATTACK_FLIGHT, activeCue, attackFlight, eventFx, shotAt } from './direction';
 
 describe('activeCue', () => {
   const cues = [
@@ -67,6 +67,7 @@ describe('eventFx', () => {
     ['stall', 'sway'],
     ['slowStart', 'sway'],
     ['spin', 'spin'],
+    ['attack', 'spin'],
   ] as const)('%s は %s に効く', (kind, channel) => {
     const fx = eventFx(script(kind), 2, 6);
     expect(fx[channel]).toBe(1);
@@ -81,5 +82,19 @@ describe('eventFx', () => {
       ],
     };
     expect(eventFx(s, 0, 6.75).boost).toBe(1);
+  });
+});
+
+describe('attackFlight', () => {
+  const attack = { t: 10, kind: 'attack', racer: 1, from: 0, item: 'missile' } as const;
+  it('着弾の 0.9 秒前から飛び始め、着弾で終わる', () => {
+    expect(ATTACK_FLIGHT).toBe(0.9);
+    expect(attackFlight(attack, 9.05)).toBeNull();
+    expect(attackFlight(attack, 9.1)).toBeCloseTo(0, 9);
+    expect(attackFlight(attack, 9.55)).toBeCloseTo(0.5, 9);
+    expect(attackFlight(attack, 10)).toBeNull();
+  });
+  it('攻撃以外のイベントは null', () => {
+    expect(attackFlight({ t: 10, kind: 'boost', racer: 1 }, 9.5)).toBeNull();
   });
 });
