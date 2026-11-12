@@ -51,13 +51,15 @@ describe('buildRaceScript', () => {
         expect(progressAt(r, 3)).toBe(0);
         expect(progressAt(r, r.finishTime)).toBe(1);
         expect(progressAt(r, 27)).toBe(1);
+        // 時刻ごとに expect を呼ぶと数百万回になり遅いので、違反した時刻だけ集めて 1 回で確かめる
+        const violations: number[] = [];
         let prev = 0;
         for (let t = 0; t <= 27; t += 0.05) {
           const p = progressAt(r, t);
-          expect(p).toBeGreaterThanOrEqual(prev);
-          expect(p).toBeLessThanOrEqual(1);
+          if (!(p >= prev && p <= 1)) violations.push(t);
           prev = p;
         }
+        expect(violations).toEqual([]);
       }
     }
   });
