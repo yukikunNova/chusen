@@ -10,6 +10,8 @@ export type NewId = () => string;
 
 export const NAME_MAX = 20;
 export const GROUP_MEMBER_MAX = 30;
+/** グループ数の上限。保存データが際限なく大きくならないようにする。 */
+export const GROUP_MAX = 50;
 export const DRAW_MIN = 2;
 export const DRAW_MAX = 20;
 export const DEFAULT_GROUP_NAME = 'グループ1';
@@ -73,7 +75,7 @@ export function selectGroup(store: Store, groupId: string): Store {
 
 export function addGroup(store: Store, rawName: string, newId: NewId): Store {
   const name = normalizeName(rawName);
-  if (name === null) return store;
+  if (name === null || store.groups.length >= GROUP_MAX) return store;
   const id = newId();
   return { ...store, groups: [...store.groups, { id, name, members: [] }], lastGroupId: id };
 }

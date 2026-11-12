@@ -1,4 +1,5 @@
 import {
+  GROUP_MAX,
   GROUP_MEMBER_MAX,
   createInitialStore,
   normalizeName,
@@ -53,6 +54,7 @@ export function parseStore(value: unknown): Store | null {
   if (!isRecord(value)) return null;
   const { version, groups, lastGroupId, muted } = value;
   if (version !== 1 || !Array.isArray(groups) || groups.length === 0) return null;
+  if (groups.length > GROUP_MAX) return null;
   if (typeof muted !== 'boolean') return null;
   const parsed: Group[] = [];
   const seen = new Set<string>();

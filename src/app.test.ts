@@ -225,4 +225,28 @@ describe('createApp', () => {
     const { root } = setup(storeWith(['a']), { extraNotice: 'X' });
     expect(one(root, 'message').textContent).toContain('X');
   });
+  it('結果画面の音ボタンでミュートを切り替え、保存して表示も変える', () => {
+    const { root, app, dones, deps, saved } = setup(storeWith(['a', 'b']));
+    app.start();
+    dones[0]!();
+    const mute = one(root, 'result-mute');
+    expect(mute.textContent).toBe('🔊 音オン');
+    mute.click();
+    expect(saved().muted).toBe(true);
+    expect(vi.mocked(deps.onMutedChange)).toHaveBeenLastCalledWith(true);
+    expect(one(root, 'result-mute').textContent).toBe('🔇 音オフ');
+    expect(app.screen).toBe('result');
+  });
+  it('読み込み失敗の通知を出し、名簿は変えない', () => {
+    const { root, map } = setup(storeWith(['a']));
+    const before = map.get(STORAGE_KEY);
+    const input = one(root, 'import') as HTMLInputElement;
+    const file = new File(['x'], 'big.json', { type: 'application/json' });
+    Object.defineProperty(file, 'size', { value: 2_000_000 });
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+    input.dispatchEvent(new Event('change'));
+    expect(one(root, 'message').textContent).toContain('読み込めないファイルです');
+    expect(map.get(STORAGE_KEY)).toBe(before);
+    expect(all(root, 'member-row')).toHaveLength(1);
+  });
 });

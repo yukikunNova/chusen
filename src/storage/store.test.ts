@@ -174,6 +174,14 @@ describe('exportStore / importStore', () => {
       ),
     ],
     ['muted が数値', JSON.stringify(raw({ muted: 1 }))],
+    [
+      'グループ 51 個',
+      JSON.stringify(
+        raw({
+          groups: Array.from({ length: 51 }, (_, i) => ({ id: `g${i}`, name: 'A', members: [] })),
+        }),
+      ),
+    ],
     ['グループ名が空', JSON.stringify(raw({ groups: [{ id: 'g1', name: '', members: [] }] }))],
     ['ID が空', JSON.stringify(raw({ groups: [{ id: '', name: 'A', members: [] }] }))],
   ])('不正な入力は null: %s', (_label, text) => {

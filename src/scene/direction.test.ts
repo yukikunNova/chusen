@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { RaceScript } from '../domain/race-script';
-import { ATTACK_FLIGHT, activeCue, attackFlight, eventFx, shotAt } from './direction';
+import { ATTACK_FLIGHT, activeCue, attackFlight, eventFx, hookDue, shotAt } from './direction';
 
 describe('activeCue', () => {
   const cues = [
@@ -96,5 +96,21 @@ describe('attackFlight', () => {
   });
   it('攻撃以外のイベントは null', () => {
     expect(attackFlight({ t: 10, kind: 'boost', racer: 1 }, 9.5)).toBeNull();
+  });
+});
+
+describe('hookDue', () => {
+  it('その時刻をまたいだ最初のフレームで true', () => {
+    expect(hookDue(4.99, 5.01, 5)).toBe(true);
+    expect(hookDue(5.01, 5.03, 5)).toBe(false);
+    expect(hookDue(4.9, 4.95, 5)).toBe(false);
+  });
+  it('0.5 秒以上遅れてまたいだ分は鳴らさない（タブ復帰時に音が重ならない）', () => {
+    expect(hookDue(2, 5.49, 5)).toBe(true);
+    expect(hookDue(2, 5.5, 5)).toBe(false);
+    expect(hookDue(-1, 27, 5)).toBe(false);
+  });
+  it('開始フレーム（前回 -1）でも時刻 0 のフックは出る', () => {
+    expect(hookDue(-1, 0.016, 0)).toBe(true);
   });
 });

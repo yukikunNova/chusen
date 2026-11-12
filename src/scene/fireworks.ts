@@ -10,6 +10,11 @@ export function launchInterval(secondsSinceFirst: number): number {
   return secondsSinceFirst < 30 ? 0.35 : 2.5;
 }
 
+/** 炸裂音を鳴らしてよいか。打ち上げ開始から 10 秒まで（結果画面を映したまま会議を続けられるように）。 */
+export function burstSoundAllowed(secondsSinceFirst: number): boolean {
+  return secondsSinceFirst < 10;
+}
+
 export type Fireworks = {
   /** 打ち上げ開始。すでに始まっていれば何もしない。 */
   start(): void;
@@ -219,7 +224,7 @@ export function createFireworks(stage: Stage, onBurst?: () => void): Fireworks {
         0,
       );
     }
-    onBurst?.();
+    if (burstSoundAllowed(sinceFirst)) onBurst?.();
   }
 
   function resetConfetti() {

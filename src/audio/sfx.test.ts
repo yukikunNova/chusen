@@ -4,6 +4,8 @@ import { createSfx, type SfxKind } from './sfx';
 /** 生成されたノード数と stop 呼び出しを数える偽 AudioContext。 */
 function fakeAudio() {
   const stats = { contexts: 0, nodes: 0, stops: 0, resumes: 0 };
+  /** 作られた順のノード。最初の 1 つが全体音量。 */
+  const created: { gain: { value: number } }[] = [];
   const param = () => ({
     value: 0,
     setValueAtTime: () => undefined,
@@ -12,7 +14,7 @@ function fakeAudio() {
   });
   const node = () => {
     stats.nodes++;
-    return {
+    const made = {
       type: 'sine',
       loop: false,
       buffer: null,
@@ -26,6 +28,8 @@ function fakeAudio() {
       start: () => undefined,
       stop: () => void stats.stops++,
     };
+    created.push(made);
+    return made;
   };
   const createContext = () => {
     stats.contexts++;
@@ -47,7 +51,7 @@ function fakeAudio() {
       }),
     } as unknown as AudioContext;
   };
-  return { stats, createContext };
+  return { stats, createContext, created };
 }
 
 const KINDS: SfxKind[] = [
@@ -146,5 +150,23 @@ describe('createSfx', () => {
       sfx.stopBgm();
       sfx.setMuted(true);
     }).not.toThrow();
+  });
+  it('ミュートで全体音量を 0 にし、鳴り始めた音もすぐ消す。解除で戻す', () => {
+    const { createContext, created } = fakeAudio();
+    const sfx = createSfx(createContext, false);
+    sfx.unlock();
+    const master = created[0]!;
+    expect(master.gain.value).toBeGreaterThan(0);
+    sfx.play('fanfare');
+    sfx.setMuted(true);
+    expect(master.gain.value).toBe(0);
+    sfx.setMuted(false);
+    expect(master.gain.value).toBeGreaterThan(0);
+  });
+  it('ミュートで始めた場合も全体音量は 0', () => {
+    const { createContext, created } = fakeAudio();
+    const sfx = createSfx(createContext, true);
+    sfx.unlock();
+    expect(created[0]!.gain.value).toBe(0);
   });
 });

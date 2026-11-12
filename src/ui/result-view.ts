@@ -1,9 +1,15 @@
 import { el } from './dom';
 
-export type ResultViewHandlers = { onCopy(): void; onRedraw(): void; onBack(): void };
+export type ResultViewHandlers = {
+  onCopy(): void;
+  onRedraw(): void;
+  onBack(): void;
+  onToggleMute(): void;
+};
 export type ResultView = {
   showCopyFallback(text: string): void;
   setCopied(): void;
+  setMuted(muted: boolean): void;
   destroy(): void;
 };
 
@@ -13,7 +19,9 @@ export function mountResultView(
   root: HTMLElement,
   names: readonly string[],
   handlers: ResultViewHandlers,
+  muted: boolean,
 ): ResultView {
+  const muteLabel = (value: boolean) => (value ? '🔇 音オフ' : '🔊 音オン');
   const list = el(
     'ol',
     { class: names.length >= TWO_COLUMN_MIN ? 'result-list two-columns' : 'result-list' },
@@ -41,6 +49,12 @@ export function mountResultView(
     type: 'button',
   });
   const back = el('button', { class: 'btn', testid: 'back', text: '名簿に戻る', type: 'button' });
+  const mute = el('button', {
+    class: 'btn',
+    testid: 'result-mute',
+    text: muteLabel(muted),
+    type: 'button',
+  });
   const fallback = el('textarea', {
     class: 'copy-fallback',
     testid: 'copy-fallback',
@@ -51,11 +65,12 @@ export function mountResultView(
   copy.addEventListener('click', () => handlers.onCopy());
   redraw.addEventListener('click', () => handlers.onRedraw());
   back.addEventListener('click', () => handlers.onBack());
+  mute.addEventListener('click', () => handlers.onToggleMute());
 
   const container = el('section', { class: 'screen result-screen' }, [
     el('h1', { class: 'result-title', text: '発表順 決定！' }),
     list,
-    el('div', { class: 'result-actions' }, [copy, redraw, back]),
+    el('div', { class: 'result-actions' }, [copy, redraw, back, mute]),
     fallback,
   ]);
   root.append(container);
@@ -70,6 +85,9 @@ export function mountResultView(
     },
     setCopied() {
       copy.textContent = 'コピーしました ✓';
+    },
+    setMuted(value) {
+      mute.textContent = muteLabel(value);
     },
     destroy() {
       container.remove();

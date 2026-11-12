@@ -72,3 +72,14 @@ export function attackFlight(event: RaceEvent, t: number): number | null {
   const k = (t - (event.t - ATTACK_FLIGHT)) / ATTACK_FLIGHT;
   return k >= 0 && k < 1 ? k : null;
 }
+
+/** これ以上遅れてまたいだ合図は捨てる（秒）。 */
+const HOOK_GRACE = 0.5;
+
+/**
+ * 時刻 time の合図（効果音など）を今のフレームで出すか。前フレーム prevT から今 t までにまたいだときだけ true。
+ * タブを戻した直後などに大きく時間が飛んだ場合、溜まった合図が一度に出ないよう、遅れすぎた分は出さない。
+ */
+export function hookDue(prevT: number, t: number, time: number): boolean {
+  return prevT < time && t >= time && t - time < HOOK_GRACE;
+}

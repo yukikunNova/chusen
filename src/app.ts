@@ -87,7 +87,10 @@ export function createApp(deps: AppDeps): App {
     if (changed && !saveStore(deps.storage, store) && !standing.includes(MSG_UNSAVABLE)) {
       standing.push(MSG_UNSAVABLE);
     }
-    if (mutedChanged) deps.onMutedChange(store.muted);
+    if (mutedChanged) {
+      deps.onMutedChange(store.muted);
+      resultView?.setMuted(store.muted);
+    }
     renderRoster(notice);
   }
 
@@ -114,6 +117,7 @@ export function createApp(deps: AppDeps): App {
         onStart: start,
         onExport: () => deps.download(EXPORT_FILENAME, exportStore(store)),
         onImport: importText,
+        onImportFailed: () => renderRoster(MSG_IMPORT_FAILED),
         confirm: deps.confirm,
       },
       deps.newId,
@@ -124,16 +128,22 @@ export function createApp(deps: AppDeps): App {
   function showResult(order: readonly Member[]) {
     const names = order.map((m) => m.name);
     const text = formatResult(names);
-    const view = mountResultView(deps.root, names, {
-      onCopy: () => {
-        void deps.copyText(text).then((ok) => {
-          if (ok) view.setCopied();
-          else view.showCopyFallback(text);
-        });
+    const view = mountResultView(
+      deps.root,
+      names,
+      {
+        onCopy: () => {
+          void deps.copyText(text).then((ok) => {
+            if (ok) view.setCopied();
+            else view.showCopyFallback(text);
+          });
+        },
+        onRedraw: redraw,
+        onBack: back,
+        onToggleMute: () => commit(setMuted(store, !store.muted)),
       },
-      onRedraw: redraw,
-      onBack: back,
-    });
+      store.muted,
+    );
     resultView = view;
   }
 

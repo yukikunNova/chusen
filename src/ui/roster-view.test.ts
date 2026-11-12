@@ -21,6 +21,7 @@ function setup(store: Store, message: string | null = null) {
     onStart: vi.fn(),
     onExport: vi.fn(),
     onImport: vi.fn(),
+    onImportFailed: vi.fn(),
     confirm: vi.fn(() => true),
   };
   const view = mountRosterView(root, handlers, ids('new'));
@@ -196,5 +197,26 @@ describe('mountRosterView', () => {
     const { root, handlers } = setup(storeWith(['a']));
     one(root, 'export').click();
     expect(handlers.onExport).toHaveBeenCalledTimes(1);
+  });
+  it('1MB を超えるファイルは読まずに失敗を知らせる', () => {
+    const { root, handlers } = setup(storeWith(['a']));
+    const input = one(root, 'import') as HTMLInputElement;
+    const text = vi.fn(async () => '{}');
+    const file = { size: 1_000_001, text } as unknown as File;
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+    input.dispatchEvent(new Event('change'));
+    expect(text).not.toHaveBeenCalled();
+    expect(handlers.onImportFailed).toHaveBeenCalledTimes(1);
+    expect(handlers.onImport).not.toHaveBeenCalled();
+  });
+  it('ファイルを読めなかったら失敗を知らせる', async () => {
+    const { root, handlers } = setup(storeWith(['a']));
+    const input = one(root, 'import') as HTMLInputElement;
+    const file = { size: 10, text: () => Promise.reject(new Error('読めない')) } as unknown as File;
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+    input.dispatchEvent(new Event('change'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(handlers.onImportFailed).toHaveBeenCalledTimes(1);
+    expect(handlers.onImport).not.toHaveBeenCalled();
   });
 });

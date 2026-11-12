@@ -25,8 +25,13 @@ export type RosterViewHandlers = {
   onStart(): void;
   onExport(): void;
   onImport(text: string): void;
+  /** ファイルが大きすぎる・読めないとき。 */
+  onImportFailed(): void;
   confirm(message: string): boolean;
 };
+/** 読み込むファイルの大きさの上限。正しい名簿は数十 KB に収まる。 */
+const IMPORT_MAX_BYTES = 1_000_000;
+
 export type RosterView = { render(store: Store, message: string | null): void; destroy(): void };
 
 export function mountRosterView(
@@ -205,7 +210,14 @@ export function mountRosterView(
     const file = importInput.files?.[0];
     importInput.value = '';
     if (!file) return;
-    void file.text().then((text) => handlers.onImport(text));
+    if (file.size > IMPORT_MAX_BYTES) {
+      handlers.onImportFailed();
+      return;
+    }
+    file.text().then(
+      (text) => handlers.onImport(text),
+      () => handlers.onImportFailed(),
+    );
   });
   allOn.addEventListener('click', () => {
     const g = group();

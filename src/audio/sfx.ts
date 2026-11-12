@@ -155,7 +155,7 @@ export function createSfx(createContext: () => AudioContext, muted: boolean): Sf
         if (!ctx) {
           ctx = createContext();
           master = ctx.createGain();
-          master.gain.value = MASTER_VOLUME;
+          master.gain.value = muted ? 0 : MASTER_VOLUME;
           master.connect(ctx.destination);
         }
         if (ctx.state === 'suspended') void ctx.resume().catch(() => undefined);
@@ -205,6 +205,8 @@ export function createSfx(createContext: () => AudioContext, muted: boolean): Sf
     stopBgm,
     setMuted(next) {
       muted = next;
+      // 鳴り始めた単発音もすぐ消えるよう、出口の音量で切る
+      if (master) master.gain.value = muted ? 0 : MASTER_VOLUME;
       if (muted) stopBgm();
     },
   };

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  GROUP_MAX,
   activeMembers,
   addGroup,
   addMembers,
@@ -141,6 +142,14 @@ describe('グループ操作', () => {
     expect(s1.groups.map((g) => g.name)).toEqual(['グループ1', '全体会議']);
     expect(currentGroup(s1).name).toBe('全体会議');
     expect(addGroup(s1, '   ', newId)).toBe(s1);
+  });
+  it('グループは 50 個まで。超える追加は変更なし', () => {
+    const newId = ids();
+    let s = createInitialStore(newId);
+    for (let i = 1; i < GROUP_MAX; i++) s = addGroup(s, `G${i}`, newId);
+    expect(GROUP_MAX).toBe(50);
+    expect(s.groups).toHaveLength(50);
+    expect(addGroup(s, 'あふれ', newId)).toBe(s);
   });
   it('renameGroup / selectGroup', () => {
     const newId = ids();

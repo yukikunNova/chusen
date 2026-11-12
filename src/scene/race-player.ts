@@ -9,7 +9,7 @@ import {
 } from '../domain/race-script';
 import type { Hud } from '../ui/hud';
 import { createAttacks } from './attacks';
-import { activeCue, attackFlight, eventFx, shotAt, type Shot } from './direction';
+import { activeCue, attackFlight, eventFx, hookDue, shotAt, type Shot } from './direction';
 import { laneOffset } from './layout';
 import { createRaceClock } from './race-clock';
 import { createRockets } from './rockets';
@@ -98,12 +98,13 @@ export function playRace(
   const crossed = (time: number, t: number) => prevT < time && t >= time;
 
   function fireHooks(t: number) {
-    if (crossed(0, t)) hooks.onCount?.(3);
-    if (crossed(1, t)) hooks.onCount?.(2);
-    if (crossed(2, t)) hooks.onCount?.(1);
-    if (crossed(TIMELINE.countdownEnd, t)) hooks.onGo?.();
+    // 音や揺れの合図は、遅れすぎたら出さない（タブ復帰時に一度に鳴らさない）
+    if (hookDue(prevT, t, 0)) hooks.onCount?.(3);
+    if (hookDue(prevT, t, 1)) hooks.onCount?.(2);
+    if (hookDue(prevT, t, 2)) hooks.onCount?.(1);
+    if (hookDue(prevT, t, TIMELINE.countdownEnd)) hooks.onGo?.();
     for (const event of script.events) {
-      if (!crossed(event.t, t)) continue;
+      if (!hookDue(prevT, t, event.t)) continue;
       shake = 1;
       if (event.kind === 'attack' && event.item) {
         shake = 1.8;
@@ -112,6 +113,7 @@ export function playRace(
       hooks.onEvent?.(event);
     }
     const winner = script.racers[0];
+    // 1 着ゴールは遅れても必ず知らせる（BGM 停止と花火開始のため）
     if (winner && crossed(winner.finishTime, t)) {
       shake = 1.6;
       hooks.onFirstFinish?.();
