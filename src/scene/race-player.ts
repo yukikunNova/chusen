@@ -22,7 +22,7 @@ import { laneOffset } from './layout';
 import { createRaceClock } from './race-clock';
 import { createRockets } from './rockets';
 import type { Stage } from './stage';
-import { currentCourse, trackFrame } from './track';
+import { currentCourse, trackFrame, type TrackFrame } from './track';
 
 /** 花火と音の差し込み口。各コールバックは該当時刻を過ぎた最初のフレームで 1 回だけ呼ぶ。 */
 export type RaceHooks = {
@@ -107,6 +107,12 @@ export function playRace(
   let attackPull = 0;
   const attackFocus = new THREE.Vector3();
   const crossed = (time: number, t: number) => prevT < time && t >= time;
+  /** カメラの位置と上向きに使う「上」。視差軽減の設定では、きりもみでも回さない。 */
+  const upOf = (frame: TrackFrame) => (stage.reducedMotion ? frame.levelUp : frame.up);
+  const rightOf = (frame: TrackFrame) =>
+    stage.reducedMotion
+      ? new THREE.Vector3().crossVectors(frame.tangent, frame.levelUp)
+      : frame.right;
 
   function fireHooks(t: number) {
     // 音や揺れの合図は、遅れすぎたら出さない（タブ復帰時に一度に鳴らさない）
@@ -197,15 +203,15 @@ export function playRace(
       case 'chase': {
         // 追走カット: 集団の少し後ろ上から
         const behind = trackFrame(packP - 0.052);
-        camera.position.copy(behind.pos).addScaledVector(behind.up, 9.5);
+        camera.position.copy(behind.pos).addScaledVector(upOf(behind), 9.5);
         lookTarget.copy(trackFrame(packP + 0.05).pos);
-        cameraUp.copy(trackFrame(packP).up);
+        cameraUp.copy(upOf(trackFrame(packP)));
         break;
       }
       case 'overhead': {
         // 俯瞰カット: 真上近くから隊列を見下ろす
         const above = trackFrame(packP - 0.03);
-        camera.position.copy(above.pos).addScaledVector(above.up, 46);
+        camera.position.copy(above.pos).addScaledVector(upOf(above), 46);
         lookTarget.copy(trackFrame(packP + 0.02).pos);
         // 真下を見るので、画面の上は進行方向にする
         cameraUp.copy(above.tangent);
@@ -216,10 +222,10 @@ export function playRace(
         const beside = trackFrame(packP + 0.03);
         camera.position
           .copy(beside.pos)
-          .addScaledVector(beside.right, 36)
-          .addScaledVector(beside.up, 6);
+          .addScaledVector(rightOf(beside), 36)
+          .addScaledVector(upOf(beside), 6);
         lookTarget.copy(trackFrame(packP - 0.005).pos);
-        cameraUp.copy(beside.up);
+        cameraUp.copy(upOf(beside));
         fov = 50;
         break;
       }
@@ -228,10 +234,10 @@ export function playRace(
         const ahead = trackFrame(leadP + 0.045);
         camera.position
           .copy(ahead.pos)
-          .addScaledVector(ahead.up, 3.5)
-          .addScaledVector(ahead.right, 9);
+          .addScaledVector(upOf(ahead), 3.5)
+          .addScaledVector(rightOf(ahead), 9);
         lookTarget.copy(trackFrame(packP + 0.01).pos);
-        cameraUp.copy(ahead.up);
+        cameraUp.copy(upOf(ahead));
         fov = 40;
         break;
       }
@@ -265,8 +271,6 @@ export function playRace(
       camera.updateProjectionMatrix();
     }
     if (attackPull > 0.001) lookTarget.lerp(attackFocus, attackPull);
-    // 視差軽減の設定では、コースと一緒に画面を回さない
-    if (stage.reducedMotion && shot !== 'overhead') cameraUp.set(0, 1, 0);
     // カットの切り替わり以外は、上向きをなめらかに追わせる
     camera.up.lerp(cameraUp, cut ? 1 : Math.min(1, dt * 6)).normalize();
     camera.lookAt(lookTarget);

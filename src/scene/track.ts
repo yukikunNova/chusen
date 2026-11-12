@@ -12,6 +12,8 @@ export type TrackFrame = {
   /** 進行方向に向かって右 */
   right: THREE.Vector3;
   up: THREE.Vector3;
+  /** ロール（きりもみの回転）を含まない上向き。 */
+  levelUp: THREE.Vector3;
 };
 
 /** いま舞台に出ているコース。createTrack が差し替える。 */
@@ -26,7 +28,13 @@ const vec = (v: Vec3) => new THREE.Vector3(v.x, v.y, v.z);
 /** いまのコース上 p の位置と向き。 */
 export function trackFrame(p: number): TrackFrame {
   const f = current.frameAt(p);
-  return { pos: vec(f.pos), tangent: vec(f.tangent), right: vec(f.right), up: vec(f.up) };
+  return {
+    pos: vec(f.pos),
+    tangent: vec(f.tangent),
+    right: vec(f.right),
+    up: vec(f.up),
+    levelUp: vec(f.levelUp),
+  };
 }
 
 const P_MIN = -0.05;
@@ -68,7 +76,8 @@ function createProps(theme: Theme, keep: Keep): THREE.Object3D {
     count: number,
     place: (object: THREE.Object3D, frame: TrackFrame, side: number) => void,
   ): THREE.InstancedMesh => {
-    const mesh = new THREE.InstancedMesh(keep(geometry), keep(material), count);
+    // インスタンス用のバッファも解放されるよう、mesh 自体も破棄対象にする
+    const mesh = keep(new THREE.InstancedMesh(keep(geometry), keep(material), count));
     for (let i = 0; i < count; i++) {
       const p = P_MIN + (P_MAX - P_MIN) * ((i + Math.random()) / count);
       const frame = trackFrame(p);

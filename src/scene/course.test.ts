@@ -124,6 +124,16 @@ describe('generateCourse', () => {
     expect(mid.up.y).toBeLessThan(-0.9);
   });
 
+  it('levelUp はロールを含まない上向き（きりもみ区間でも上を向いたまま）', () => {
+    const course = courses.find((c) => c.segments.some((s) => s.kind === 'corkscrew'))!;
+    const seg = course.segments.find((s) => s.kind === 'corkscrew')!;
+    const mid = course.frameAt((seg.from + seg.to) / 2);
+    expect(mid.up.y).toBeLessThan(-0.9);
+    expect(mid.levelUp.y).toBeGreaterThan(0.9);
+    expect(Math.abs(dot(mid.levelUp, mid.tangent))).toBeLessThan(1e-9);
+    const flat = course.frameAt(0);
+    expect(flat.levelUp).toEqual(flat.up);
+  });
   it('ジャンプ台の区間だけ浮き、床が途切れる', () => {
     const course = courses.find((c) => c.segments.some((s) => s.kind === 'jump'))!;
     const seg = course.segments.find((s) => s.kind === 'jump')!;
