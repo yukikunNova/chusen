@@ -1,8 +1,9 @@
 import * as THREE from 'three';
-import { laneOffset, nameTagText } from './layout';
+import { laneOffset, nameTagText, pickVehicles } from './layout';
 import type { Stage } from './stage';
 import { glowTexture, labelTexture } from './textures';
 import { trackFrame } from './track';
+import { buildVehicle, createVehiclePalette } from './vehicles';
 
 /** 各 0〜1。spin: 回転、boost: 加速、sway: ふらつき。 */
 export type RocketFx = { spin: number; boost: number; sway: number };
@@ -27,6 +28,8 @@ type Rocket = {
   flame: THREE.Mesh;
   tag: THREE.Sprite;
   tagAspect: number;
+  /** 中心から噴射口までの距離。 */
+  tailOffset: number;
   lane: { x: number; y: number };
   color: THREE.Color;
   phase: number;
@@ -55,31 +58,13 @@ export function createRockets(stage: Stage, names: readonly string[]): Rockets {
     return item;
   };
 
-  // 機首が +Z を向く形で作り、lookAt で進行方向へ向ける
-  const bodyGeometry = keep(new THREE.CylinderGeometry(0.62, 0.5, 2.3, 20));
-  const noseGeometry = keep(new THREE.ConeGeometry(0.62, 1.25, 20));
-  const finGeometry = keep(new THREE.BoxGeometry(0.1, 0.95, 1.15));
-  const windowGeometry = keep(new THREE.SphereGeometry(0.3, 16, 12));
-  const nozzleGeometry = keep(new THREE.CylinderGeometry(0.38, 0.55, 0.45, 16));
-  const flameGeometry = keep(new THREE.ConeGeometry(0.42, 2.2, 14));
-  const windowMaterial = keep(
-    new THREE.MeshStandardMaterial({ color: 0xbff4ff, emissive: 0x29e0ff, emissiveIntensity: 0.7 }),
-  );
-  const nozzleMaterial = keep(new THREE.MeshStandardMaterial({ color: 0x2b2b3a, metalness: 0.6 }));
-  const noseMaterial = keep(new THREE.MeshStandardMaterial({ color: 0xd8dcf0, roughness: 0.45 }));
-  const flameMaterial = keep(
-    new THREE.MeshBasicMaterial({
-      color: 0xffa52e,
-      transparent: true,
-      opacity: 0.7,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-    }),
-  );
+  const palette = createVehiclePalette(keep);
 
   // レーン順から結果が読めないよう、並び順と色はランダムにする
   const lanes = shuffledIndices(count);
   const hues = shuffledIndices(count);
+  // 乗り物も毎回ランダム（見た目だけで、順位には関係しない）
+  const kinds = pickVehicles(count, Math.random);
 
   const rockets: Rocket[] = names.map((name, i) => {
     const color = new THREE.Color().setHSL(hues[i]! / count, 0.95, 0.56);
@@ -93,28 +78,7 @@ export function createRockets(stage: Stage, names: readonly string[]): Rockets {
       }),
     );
 
-    const model = new THREE.Group();
-    const hull = new THREE.Mesh(bodyGeometry, bodyMaterial);
-    const nose = new THREE.Mesh(noseGeometry, noseMaterial);
-    nose.position.y = 1.775;
-    const nozzle = new THREE.Mesh(nozzleGeometry, nozzleMaterial);
-    nozzle.position.y = -1.35;
-    const porthole = new THREE.Mesh(windowGeometry, windowMaterial);
-    porthole.position.set(0, 0.45, 0.5);
-    model.add(hull, nose, nozzle, porthole);
-    for (let k = 0; k < 3; k++) {
-      const pivot = new THREE.Group();
-      const fin = new THREE.Mesh(finGeometry, bodyMaterial);
-      fin.position.set(0, -0.85, 0.95);
-      pivot.add(fin);
-      pivot.rotation.y = (k * Math.PI * 2) / 3;
-      model.add(pivot);
-    }
-    const flame = new THREE.Mesh(flameGeometry, flameMaterial);
-    flame.rotation.x = Math.PI;
-    flame.position.y = -2.6;
-    model.add(flame);
-    model.rotation.x = Math.PI / 2;
+    const { model, flame, tail } = buildVehicle(kinds[i]!, bodyMaterial, palette, keep);
     model.scale.setScalar(MODEL_SCALE);
 
     const body = new THREE.Group();
@@ -147,6 +111,7 @@ export function createRockets(stage: Stage, names: readonly string[]): Rockets {
       flame,
       tag,
       tagAspect: label.aspect,
+      tailOffset: tail * MODEL_SCALE,
       lane: laneOffset(lanes[i]!, count),
       color,
       phase: Math.random() * Math.PI * 2,
@@ -272,7 +237,7 @@ export function createRockets(stage: Stage, names: readonly string[]): Rockets {
       );
       rocket.boost = fx.boost;
       rocket.back.copy(frame.tangent).negate();
-      rocket.tail.copy(rocket.body.position).addScaledVector(rocket.back, 2.2 * MODEL_SCALE);
+      rocket.tail.copy(rocket.body.position).addScaledVector(rocket.back, rocket.tailOffset);
 
       const tagSide = rocket.lane.y < 0 ? -1 : 1;
       const distance = stage.camera.position.distanceTo(rocket.body.position);

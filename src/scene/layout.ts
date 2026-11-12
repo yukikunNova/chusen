@@ -37,3 +37,33 @@ export function nameTagText(name: string): string {
   const chars = Array.from(name);
   return chars.length <= NAME_TAG_MAX ? name : `${chars.slice(0, NAME_TAG_MAX).join('')}…`;
 }
+
+/** 乗り物の種類。前半は宇宙もの、後半は会議室にある物。 */
+export const VEHICLE_KINDS = [
+  'rocket',
+  'ufo',
+  'shuttle',
+  'satellite',
+  'chair',
+  'box',
+  'cup',
+  'keyboard',
+] as const;
+export type VehicleKind = (typeof VEHICLE_KINDS)[number];
+
+/**
+ * 各機体の乗り物を決める。種類数以下の人数なら全員ちがう乗り物、超えたらどの種類も同じくらい使う。
+ * 見た目だけの割り当てで、順位には関係しない。
+ */
+export function pickVehicles(count: number, rand: () => number): VehicleKind[] {
+  const out: VehicleKind[] = [];
+  while (out.length < count) {
+    const round = [...VEHICLE_KINDS];
+    for (let i = round.length - 1; i > 0; i--) {
+      const j = Math.min(i, Math.floor(rand() * (i + 1)));
+      [round[i], round[j]] = [round[j]!, round[i]!];
+    }
+    out.push(...round);
+  }
+  return out.slice(0, count);
+}
