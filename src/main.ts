@@ -5,6 +5,9 @@ import { buildCommentary } from './domain/commentary';
 import { createRand } from './domain/prng';
 import { buildRaceScript, drawPhotoGap, type RaceEventKind } from './domain/race-script';
 import { cryptoRandomInt } from './domain/shuffle';
+import { beginCapture } from './media/replay-capture';
+import type { ReplayVideo } from './media/replay-recorder';
+import { createReplaySession, type ReplaySession } from './media/replay-session';
 import { generateCourse } from './scene/course';
 import { createFireworks } from './scene/fireworks';
 import { idleCamera, playRace, type RaceHooks } from './scene/race-player';
@@ -101,7 +104,19 @@ let muted = false;
 let bgmWanted = false;
 /** フィーバータイムの速い BGM か。 */
 let bgmFast = false;
+/** いまのレースのリプレイ動画の録画。3D が使えない回は null。 */
+let replay: ReplaySession | null = null;
+/** 終わったレースの動画（できあがりを待つ）。 */
+let replayResult: Promise<ReplayVideo | null> | null = null;
+function onTabHidden(cb: () => void): () => void {
+  const handler = () => {
+    if (document.hidden) cb();
+  };
+  document.addEventListener('visibilitychange', handler);
+  return () => document.removeEventListener('visibilitychange', handler);
+}
 const hooks: RaceHooks = {
+  onTick: (t) => replay?.tick(t),
   onCount: () => sfx.play('count'),
   onGo: () => {
     sfx.play('go');
@@ -132,6 +147,9 @@ const hooks: RaceHooks = {
   },
   onEvent: (event) => sfx.play(EVENT_SOUND[event.kind]),
   onEnd: (skipped) => {
+    // 音を切る前に録画を閉じる（スキップした回は捨てる）
+    replayResult = replay?.end(skipped) ?? null;
+    replay = null;
     bgmWanted = false;
     sfx.stopBgm();
     if (skipped) {
@@ -183,10 +201,19 @@ const runRace: RaceRunner = (order, onDone) => {
     muted,
   );
   hud = raceHud;
+  replayResult = null;
+  replay = createReplaySession({
+    script,
+    begin: () => beginCapture(stage.renderer.domElement, sfx.recordingStream(), course.name),
+    onAfterRender: stage.onAfterRender,
+    onHidden: onTabHidden,
+  });
   return playRace(stage, script, cues, raceHud, hooks, () => {
     raceHud.destroy();
     if (hud === raceHud) hud = null;
-    onDone(summary);
+    const video = replayResult;
+    replayResult = null;
+    onDone(summary, video ?? undefined);
   });
 };
 
@@ -202,7 +229,7 @@ app = createApp({
   confirm: (message) => window.confirm(message),
   share: {
     renderCard: renderShareCard,
-    saveImage: (blob, filename) => saveBlob(filename, blob),
+    saveFile: (blob, filename) => saveBlob(filename, blob),
     copyImage,
     openPost: (url) => {
       // noopener を付けると開けたかどうかが分からないので、開いたあとで親への参照を切る

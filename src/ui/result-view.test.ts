@@ -10,6 +10,7 @@ const handlers = () => ({
   onSaveImage: vi.fn(),
   onCopyImage: vi.fn(),
   onPost: vi.fn(),
+  onSaveVideo: vi.fn(),
 });
 const all = (root: HTMLElement, id: string) =>
   Array.from(root.querySelectorAll<HTMLElement>(`[data-testid="${id}"]`));
@@ -154,5 +155,34 @@ describe('mountResultView', () => {
     expect(one(root, 'share-note').textContent).toBe('');
     view.setShareNote('画像をコピーしました');
     expect(one(root, 'share-note').textContent).toBe('画像をコピーしました');
+  });
+  it('動画: 無い回はボタンを出さない', () => {
+    const root = document.createElement('div');
+    mountResultView(root, names(2), null, handlers(), false);
+    expect(one(root, 'save-video').hidden).toBe(true);
+    expect(one(root, 'video-note').textContent).toBe('');
+  });
+  it('動画: 準備中は押せず、できたら押せる。保存できない間は理由を出す', () => {
+    const root = document.createElement('div');
+    const h = handlers();
+    const view = mountResultView(root, names(2), null, h, false);
+    const button = one(root, 'save-video') as HTMLButtonElement;
+    view.setVideo('pending');
+    expect(button.hidden).toBe(false);
+    expect(button.disabled).toBe(true);
+    expect(button.textContent).toBe('動画を準備中…');
+    view.setVideo('ready', 'WebM 形式です');
+    expect(button.disabled).toBe(false);
+    expect(button.textContent).toBe('動画を保存');
+    expect(one(root, 'video-note').textContent).toBe('WebM 形式です');
+    button.click();
+    expect(h.onSaveVideo).toHaveBeenCalledTimes(1);
+    view.setVideo('blocked', '名前を伏せている間は保存できません');
+    expect(button.hidden).toBe(false);
+    expect(button.disabled).toBe(true);
+    expect(one(root, 'video-note').textContent).toBe('名前を伏せている間は保存できません');
+    view.setVideo('none');
+    expect(button.hidden).toBe(true);
+    expect(one(root, 'video-note').textContent).toBe('');
   });
 });

@@ -297,4 +297,27 @@ describe('createSfx', () => {
     };
     expect(pitch(6)).toBeGreaterThan(pitch(2));
   });
+  it('録音用の出口は全体音量の後ろにつなぐ（ミュート中は無音）。何度呼んでも同じもの', () => {
+    const { createContext, created, reaches } = fakeAudio();
+    const context = createContext();
+    const recording = { stream: { id: 'rec' } };
+    let made = 0;
+    (context as unknown as Record<string, unknown>).createMediaStreamDestination = () => {
+      made++;
+      return recording;
+    };
+    const sfx = createSfx(() => context, false);
+    expect(sfx.recordingStream()).toBeNull();
+    sfx.unlock();
+    expect(sfx.recordingStream()).toBe(recording.stream);
+    expect(sfx.recordingStream()).toBe(recording.stream);
+    expect(made).toBe(1);
+    expect(reaches(created[0], recording)).toBe(true);
+  });
+  it('録音用の出口を作れない環境では null', () => {
+    const { createContext } = fakeAudio();
+    const sfx = createSfx(createContext, false);
+    sfx.unlock();
+    expect(sfx.recordingStream()).toBeNull();
+  });
 });
