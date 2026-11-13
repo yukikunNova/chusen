@@ -1,6 +1,5 @@
-/** コース・レーン・名札の配置計算。three に依存しない純粋関数だけを置く。 */
+/** レーン・名札・乗り物の配置計算。three に依存しない純粋関数だけを置く。 */
 
-export const TRACK_LENGTH = 520;
 export const TRACK_HALF_WIDTH = 19;
 const LANE_SPACING_SINGLE = 4.3;
 const LANE_SPACING_DOUBLE = 3.5;
@@ -20,15 +19,6 @@ export function laneOffset(index: number, count: number): { x: number; y: number
   return {
     x: (col - (rowCount - 1) / 2) * LANE_SPACING_DOUBLE,
     y: inUpper ? ROW_HEIGHT : -ROW_HEIGHT,
-  };
-}
-
-/** コース中心線。p=0 がスタート線、p=1 がゴール線。奥（-z）へ進む。 */
-export function trackPoint(p: number): { x: number; y: number; z: number } {
-  return {
-    x: 34 * Math.sin(p * Math.PI * 2 * 1.1),
-    y: 9 * Math.sin(p * Math.PI * 2 * 0.8 + 0.6),
-    z: -p * TRACK_LENGTH,
   };
 }
 

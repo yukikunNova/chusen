@@ -28,12 +28,12 @@ export function glowTexture(): THREE.CanvasTexture {
   return toTexture(canvas);
 }
 
-/** コース床のネオン格子。 */
-export function gridTexture(): THREE.CanvasTexture {
+/** コース床の光る格子。地の色・格子の色・横帯の色を指定する。 */
+export function gridTexture(floor: string, grid: string, band: string): THREE.CanvasTexture {
   const { canvas, ctx } = canvas2d(256, 256);
-  ctx.fillStyle = 'rgba(14,6,44,0.78)';
+  ctx.fillStyle = floor;
   ctx.fillRect(0, 0, 256, 256);
-  ctx.strokeStyle = 'rgba(120,90,255,0.9)';
+  ctx.strokeStyle = grid;
   ctx.lineWidth = 3;
   for (let i = 0; i <= 8; i++) {
     const v = i * 32;
@@ -44,7 +44,7 @@ export function gridTexture(): THREE.CanvasTexture {
     ctx.lineTo(256, v);
     ctx.stroke();
   }
-  ctx.fillStyle = 'rgba(41,224,255,0.95)';
+  ctx.fillStyle = band;
   ctx.fillRect(0, 120, 256, 16);
   const texture = toTexture(canvas);
   texture.wrapS = THREE.RepeatWrapping;
