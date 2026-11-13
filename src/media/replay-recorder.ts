@@ -10,8 +10,27 @@ export const REPLAY_MIME_TYPES = [
   'video/webm',
 ] as const;
 
-export function pickMimeType(isSupported: (type: string) => boolean): string | null {
-  return REPLAY_MIME_TYPES.find((type) => isSupported(type)) ?? null;
+/** この環境で使える形式（優先順）。 */
+export function supportedMimeTypes(isSupported: (type: string) => boolean): string[] {
+  return REPLAY_MIME_TYPES.filter((type) => isSupported(type));
+}
+
+/** 時刻の揺れを見込んで、期限より少し早くても写す（ミリ秒）。 */
+const PACE_TOLERANCE = 2;
+
+/**
+ * 動画のコマ数に合わせて「今のコマを写すか」を決める。now はミリ秒。
+ * 期限は前回の期限から進めるので、画面の更新間隔が半端でも余りを捨てず、目標のコマ数に近づく。
+ */
+export function createFramePacer(fps: number): (now: number) => boolean {
+  const interval = 1000 / fps;
+  let next = -Infinity;
+  return (now) => {
+    if (now < next - PACE_TOLERANCE) return false;
+    // 大きく遅れたときは、取り戻そうとせず今から数え直す
+    next = now - next > interval ? now + interval : next + interval;
+    return true;
+  };
 }
 
 /** MediaRecorder のうち、ここで使う部分。 */
@@ -31,8 +50,8 @@ export type Recording = {
   cancel(): void;
 };
 
-/** すぐ録り始める。 */
-export function recordStream(recorder: RecorderLike, mimeType: string): Recording {
+/** すぐ録り始める。録り始められなければ null（呼び出し側が別の形式を試せる）。 */
+export function recordStream(recorder: RecorderLike, mimeType: string): Recording | null {
   const format = mimeType.startsWith('video/mp4') ? 'mp4' : 'webm';
   const chunks: Blob[] = [];
   let failed = false;
@@ -57,9 +76,7 @@ export function recordStream(recorder: RecorderLike, mimeType: string): Recordin
   try {
     recorder.start();
   } catch {
-    failed = true;
-    stopped = true;
-    settle(null);
+    return null;
   }
 
   function halt() {

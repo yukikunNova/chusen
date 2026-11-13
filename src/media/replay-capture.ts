@@ -1,6 +1,12 @@
 import type { ReplayTelop } from '../scene/replay';
 import { REPLAY_HEIGHT, REPLAY_WIDTH, drawReplayFrame } from '../ui/replay-frame';
-import { pickMimeType, recordStream, type RecorderLike } from './replay-recorder';
+import {
+  createFramePacer,
+  recordStream,
+  supportedMimeTypes,
+  type RecorderLike,
+  type Recording,
+} from './replay-recorder';
 import type { ReplayCapture } from './replay-session';
 
 /** 動画のコマ数（毎秒）と画質。 */
@@ -18,8 +24,8 @@ export function beginCapture(
 ): ReplayCapture | null {
   try {
     if (typeof MediaRecorder === 'undefined') return null;
-    const mimeType = pickMimeType((type) => MediaRecorder.isTypeSupported(type));
-    if (!mimeType) return null;
+    const mimeTypes = supportedMimeTypes((type) => MediaRecorder.isTypeSupported(type));
+    if (mimeTypes.length === 0) return null;
     const canvas = document.createElement('canvas');
     canvas.width = REPLAY_WIDTH;
     canvas.height = REPLAY_HEIGHT;
@@ -28,30 +34,43 @@ export function beginCapture(
 
     const picture = canvas.captureStream(REPLAY_FPS);
     const tracks = [...picture.getVideoTracks(), ...(audio?.getAudioTracks() ?? [])];
-    const recorder = new MediaRecorder(new MediaStream(tracks), {
-      mimeType,
-      videoBitsPerSecond: REPLAY_BITRATE,
-    });
-    const recording = recordStream(recorder as unknown as RecorderLike, mimeType);
+    const stream = new MediaStream(tracks);
+    // 使えると答えた形式でも、実際には録り始められないことがある。だめなら次の形式を試す
+    let recording: Recording | null = null;
+    for (const mimeType of mimeTypes) {
+      try {
+        const recorder = new MediaRecorder(stream, {
+          mimeType,
+          videoBitsPerSecond: REPLAY_BITRATE,
+        });
+        recording = recordStream(recorder as unknown as RecorderLike, mimeType);
+      } catch {
+        recording = null;
+      }
+      if (recording) break;
+    }
+    if (!recording) {
+      picture.getTracks().forEach((track) => track.stop());
+      return null;
+    }
+    const active = recording;
     // 録画用の映像だけ止める（音の出口は次の回も使う）
     const release = () => picture.getTracks().forEach((track) => track.stop());
-    let drawnAt = -Infinity;
+    const due = createFramePacer(REPLAY_FPS);
 
     return {
       frame(telop: ReplayTelop) {
         // 画面の更新が速い環境でも、写すのは動画のコマ数まで
-        const now = performance.now();
-        if (now - drawnAt < 1000 / REPLAY_FPS - 2) return;
-        drawnAt = now;
+        if (!due(performance.now())) return;
         try {
           drawReplayFrame(ctx, source, telop, courseName);
         } catch {
           // 1 コマ写せなくても録画は続ける
         }
       },
-      stop: () => recording.stop().finally(release),
+      stop: () => active.stop().finally(release),
       cancel() {
-        recording.cancel();
+        active.cancel();
         release();
       },
     };
