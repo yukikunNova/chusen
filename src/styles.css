@@ -539,6 +539,20 @@ button:disabled {
   flex: none;
 }
 
+/* 狭い画面では見本と操作を縦に積む */
+@media (max-width: 480px) {
+  .share {
+    flex-direction: column;
+    align-items: stretch;
+    width: 94vw;
+  }
+
+  .share-preview {
+    width: 100%;
+    height: auto;
+  }
+}
+
 .share-controls {
   display: flex;
   flex-direction: column;
