@@ -200,8 +200,6 @@ export function playRace(
       }
     }
     if (script.photo && hookDue(prevT, t, PHOTO_SLOW.from)) hooks.onPhoto?.();
-    const second = script.racers[1];
-    if (script.photo && second && hookDue(prevT, t, second.finishTime)) hud.flash();
     if (hookDue(prevT, t, FEVER_FROM)) {
       hud.showBanner('FEVER TIME!!', 'fever');
       hud.flash();
@@ -332,11 +330,16 @@ export function playRace(
         break;
       }
       case 'photo': {
-        // 写真判定: ゴール線の真横から望遠で撮る（前後の差がそのまま左右の差に見える）
+        // 写真判定: ゴール線の横から望遠で撮る（前後の差が左右の差に見える）。
+        // 真横だとゲートの輪が線に重なるので、少し手前から斜めに狙う
         const line = trackFrame(1);
-        camera.position.copy(line.pos).addScaledVector(line.right, 34).addScaledVector(line.up, 3);
+        camera.position
+          .copy(line.pos)
+          .addScaledVector(line.right, 44)
+          .addScaledVector(line.tangent, -16)
+          .addScaledVector(line.up, 6);
         lookTarget.copy(line.pos).addScaledVector(line.up, 1.5);
-        fov = 26;
+        fov = 30;
         break;
       }
       case 'pullback': {
