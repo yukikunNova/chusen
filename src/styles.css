@@ -421,12 +421,15 @@ button:disabled {
   background: rgb(6 3 22 / 72%);
   backdrop-filter: blur(8px);
   min-width: min(560px, 92vw);
+  /* 長い名前でも画面からはみ出さない（名前は「…」で省く） */
+  max-width: 94vw;
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .result-list.two-columns {
   grid-template-rows: repeat(var(--rows), auto);
   grid-auto-flow: column;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   min-width: min(1000px, 94vw);
 }
 
@@ -506,6 +509,10 @@ button:disabled {
   white-space: nowrap;
   text-shadow: none;
   box-shadow: 0 0 10px rgb(255 46 147 / 60%);
+}
+
+.result-item {
+  min-width: 0;
 }
 
 .result-item .name {

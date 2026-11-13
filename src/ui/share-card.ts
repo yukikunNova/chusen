@@ -13,6 +13,8 @@ const CYAN = '#29e0ff';
 const MARGIN = 60;
 const ROWS_TOP = 190;
 const ROWS_BOTTOM = 590;
+/** 長い名前を収めるために、文字をどこまで小さくしてよいか（元の大きさに対する割合）。 */
+const NAME_MIN_SCALE = 0.55;
 /** この人数までは 1 列で大きく、超えたら 2 列。 */
 const SINGLE_COLUMN_MAX = 5;
 
@@ -124,8 +126,15 @@ function drawRows(ctx: CanvasRenderingContext2D, model: ShareModel) {
     const badgeGap = row.title ? size * 0.35 : 0;
 
     ctx.textAlign = 'left';
-    ctx.font = font(size);
-    const name = fit(ctx, row.name, columnWidth - rankWidth - badgeWidth - badgeGap);
+    // 長い名前は、まず文字を小さくして収める。それでも収まらなければ末尾を省く
+    const nameWidth = columnWidth - rankWidth - badgeWidth - badgeGap;
+    let nameSize = size;
+    ctx.font = font(nameSize);
+    while (nameSize > size * NAME_MIN_SCALE && ctx.measureText(row.name).width > nameWidth) {
+      nameSize -= 2;
+      ctx.font = font(nameSize);
+    }
+    const name = fit(ctx, row.name, nameWidth);
     ctx.fillStyle = first ? GOLD : '#fff';
     if (first) {
       ctx.shadowColor = 'rgb(255 159 28 / 90%)';

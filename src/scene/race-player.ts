@@ -199,7 +199,8 @@ export function playRace(
         hooks.onBox?.('reveal', box);
       }
     }
-    if (script.photo && hookDue(prevT, t, PHOTO_SLOW.from)) hooks.onPhoto?.();
+    // スローにしない回（視差軽減）は、音楽を止める合図も出さない
+    if (photoShot && hookDue(prevT, t, PHOTO_SLOW.from)) hooks.onPhoto?.();
     if (hookDue(prevT, t, FEVER_FROM)) {
       hud.showBanner('FEVER TIME!!', 'fever');
       hud.flash();

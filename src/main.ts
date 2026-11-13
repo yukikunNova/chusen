@@ -204,7 +204,12 @@ app = createApp({
     renderCard: renderShareCard,
     saveImage: (blob, filename) => saveBlob(filename, blob),
     copyImage,
-    openPost: (url) => void window.open(url, '_blank', 'noopener'),
+    openPost: (url) => {
+      // noopener を付けると開けたかどうかが分からないので、開いたあとで親への参照を切る
+      const opened = window.open(url, '_blank');
+      if (opened) opened.opener = null;
+      return opened !== null;
+    },
   },
   extraNotice: stage ? null : '3D表示が使えないため簡易表示で動作します',
   onScreenChange: (screen) => {

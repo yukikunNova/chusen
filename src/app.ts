@@ -38,8 +38,8 @@ export type ShareDeps = {
   renderCard(model: ShareModel): Promise<CardImage | null>;
   saveImage(blob: Blob, filename: string): void;
   copyImage(blob: Blob): Promise<boolean>;
-  /** 投稿画面を新しいタブで開く。 */
-  openPost(url: string): void;
+  /** 投稿画面を新しいタブで開く。開けなかった（ブロックされた）ら false。 */
+  openPost(url: string): boolean;
 };
 
 export type AppDeps = {
@@ -77,6 +77,8 @@ const MSG_CARD_FAILED = '画像を作れませんでした。「結果をコピ�
 const MSG_IMAGE_COPIED = '画像をコピーしました';
 const MSG_IMAGE_COPY_FAILED = 'コピーできませんでした。「画像を保存」を使ってください';
 const MSG_POST_PASTE = '画像をコピーしました。投稿画面で貼り付けてください（Ctrl+V / ⌘V）';
+const MSG_POST_BLOCKED =
+  '投稿画面を開けませんでした。ポップアップを許可してから、もう一度押してください';
 const MSG_POST_ATTACH = '投稿画面を開きました。「画像を保存」した画像を投稿に添付してください';
 const MSG_BROKEN = '保存データが壊れていたため初期化しました';
 const MSG_UNSAVABLE = 'このブラウザでは名簿を保存できません（閉じると消えます）';
@@ -208,8 +210,9 @@ export function createApp(deps: AppDeps): App {
           const url = postUrl(shareText(model()));
           // 投稿画面は画像を受け取れないので、先にクリップボードへ入れてから開く
           void deps.share.copyImage(card.blob).then((ok) => {
-            deps.share.openPost(url);
-            if (resultView === view) view.setShareNote(ok ? MSG_POST_PASTE : MSG_POST_ATTACH);
+            const opened = deps.share.openPost(url);
+            if (resultView !== view) return;
+            view.setShareNote(!opened ? MSG_POST_BLOCKED : ok ? MSG_POST_PASTE : MSG_POST_ATTACH);
           });
         },
       },

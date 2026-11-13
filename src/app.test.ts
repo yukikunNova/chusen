@@ -38,7 +38,7 @@ function setup(
     }),
     saveImage: vi.fn((_blob: Blob, _filename: string) => undefined),
     copyImage: vi.fn(async (_blob: Blob) => true),
-    openPost: vi.fn((_url: string) => undefined),
+    openPost: vi.fn((_url: string) => true),
   };
   const raceSkip = vi.fn();
   const runRace = vi.fn<RaceRunner>((_order, onDone) => {
@@ -362,13 +362,20 @@ describe('結果の共有', () => {
     await vi.waitFor(() => expect(share.openPost).toHaveBeenCalledTimes(1));
     await vi.waitFor(() => expect(one(root, 'share-note').textContent).toContain('画像を保存'));
   });
+  it('X に投稿: 投稿画面を開けなかった（ポップアップがブロックされた）ら、そう案内する', async () => {
+    const { root, share } = await toResult();
+    share.openPost.mockReturnValue(false);
+    one(root, 'post').click();
+    await vi.waitFor(() => expect(one(root, 'share-note').textContent).toContain('ポップアップ'));
+    expect(one(root, 'share-note').textContent).not.toContain('貼り付け');
+  });
   it('画像を作れない環境では、見本を出さずボタンも止めたまま案内する', async () => {
     const { root, app, dones } = setup(storeWith(['a', 'b']), {
       share: {
         renderCard: async () => null,
         saveImage: vi.fn(),
         copyImage: vi.fn(async () => false),
-        openPost: vi.fn(),
+        openPost: vi.fn(() => true),
       },
     });
     app.start();
