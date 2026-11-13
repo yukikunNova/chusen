@@ -410,7 +410,7 @@ button:disabled {
 }
 
 .result-list {
-  --row: min(9vh, calc(50vh / var(--rows, 5)));
+  --row: min(8vh, calc(36vh / var(--rows, 5)));
   list-style: none;
   margin: 0;
   padding: clamp(10px, 2vh, 24px) clamp(14px, 3vw, 40px);
@@ -480,6 +480,93 @@ button:disabled {
   content: '👑';
   font-size: 0.55em;
   margin-right: 0.15em;
+}
+
+.result-info {
+  margin: 0;
+  font-size: clamp(13px, 2.4vh, 22px);
+  font-weight: 700;
+  color: var(--accent2);
+  text-shadow: 0 0 6px #000;
+  text-align: center;
+}
+
+.title-badge {
+  flex: none;
+  align-self: center;
+  padding: 0.25em 0.8em;
+  border-radius: 99px;
+  background: var(--accent);
+  color: #fff;
+  font-size: max(0.36em, 11px);
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+  text-shadow: none;
+  box-shadow: 0 0 10px rgb(255 46 147 / 60%);
+}
+
+.result-item .name {
+  min-width: 0;
+}
+
+.share {
+  display: flex;
+  align-items: center;
+  gap: clamp(10px, 2vw, 20px);
+  padding: 10px 14px;
+  border-radius: 16px;
+  border: 1px solid rgb(255 255 255 / 20%);
+  background: rgb(6 3 22 / 72%);
+  backdrop-filter: blur(8px);
+  max-width: 94vw;
+}
+
+.share-preview {
+  height: clamp(72px, 15vh, 150px);
+  aspect-ratio: 16 / 9;
+  border-radius: 8px;
+  border: 1px solid rgb(255 255 255 / 30%);
+  flex: none;
+}
+
+.share-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.share-hide {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.share-hide input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+}
+
+.share-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.share-note {
+  margin: 0;
+  min-height: 1.4em;
+  font-size: 13px;
+  color: var(--gold);
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 .result-actions {
