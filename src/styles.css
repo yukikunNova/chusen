@@ -626,6 +626,59 @@ button:disabled {
   filter: drop-shadow(0 0 0.15em #fff);
 }
 
+.hud-photo {
+  position: absolute;
+  top: 12vh;
+  left: 50%;
+  width: max-content;
+  max-width: 94vw;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1em;
+  padding: 0.25em 0.9em;
+  border: 0.08em solid #fff;
+  border-radius: 0.3em;
+  background: rgb(0 0 0 / 72%);
+  font-size: max(6vh, 26px);
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  color: #fff;
+}
+
+.hud-photo-gap {
+  font-size: 1.7em;
+  font-style: italic;
+  letter-spacing: 0.02em;
+  color: var(--gold);
+  text-shadow:
+    0 0 0.3em rgb(255 159 28 / 95%),
+    0.05em 0.07em 0 #7a4b00;
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-photo[data-state='judging'] .hud-photo-label {
+  animation: photo-blink 0.5s steps(2, jump-none) infinite;
+}
+
+.hud-photo.pop {
+  animation: photo-pop 0.35s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+}
+
+@keyframes photo-blink {
+  to {
+    opacity: 0.35;
+  }
+}
+
+@keyframes photo-pop {
+  from {
+    transform: translateX(-50%) scale(1.8);
+    opacity: 0;
+  }
+}
+
 .hud-banner.pop {
   animation: banner-pop 1.5s cubic-bezier(0.15, 1.6, 0.4, 1) both;
 }
@@ -980,6 +1033,8 @@ button:disabled {
   .hud-score.pop,
   .hud-combo.pop,
   .hud-roulette.pop,
+  .hud-photo.pop,
+  .hud-photo[data-state='judging'] .hud-photo-label,
   .hud-countdown.pop,
   .hud-course,
   .hud-telop.pop,

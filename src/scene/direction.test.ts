@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { RaceScript } from '../domain/race-script';
 import {
   ATTACK_FLIGHT,
+  PHOTO_SLOW,
   activeCue,
   attackFlight,
   eventFx,
@@ -48,6 +49,20 @@ describe('shotAt', () => {
     [26.5, 'pullback'],
   ] as const)('%f 秒は %s', (t, shot) => {
     expect(shotAt(t)).toBe(shot);
+  });
+});
+
+describe('写真判定のカット', () => {
+  it('スロー区間はゴール前後の 0.4 秒で、1/5 の速さ', () => {
+    expect(PHOTO_SLOW).toEqual({ from: 22.8, to: 23.2, rate: 0.2 });
+  });
+  it('写真判定の回だけ、スロー区間は真横からのカットになる', () => {
+    expect(shotAt(22.79, true)).toBe('finalCorner');
+    expect(shotAt(22.8, true)).toBe('photo');
+    expect(shotAt(23.19, true)).toBe('photo');
+    expect(shotAt(23.2, true)).toBe('goal');
+    expect(shotAt(23, false)).toBe('goal');
+    expect(shotAt(22.9)).toBe('finalCorner');
   });
 });
 

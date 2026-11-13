@@ -109,6 +109,12 @@ const hooks: RaceHooks = {
     sfx.stopBgm();
     sfx.startBgm(true);
   },
+  onPhoto: () => {
+    // 音楽を止めて、心臓の音だけにする
+    bgmWanted = false;
+    sfx.stopBgm();
+    sfx.play('photo');
+  },
   onEvent: (event) => sfx.play(EVENT_SOUND[event.kind]),
   onEnd: (skipped) => {
     bgmWanted = false;
