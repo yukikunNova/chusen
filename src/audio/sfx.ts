@@ -1,13 +1,30 @@
 /** 効果音と BGM。すべて Web Audio の発振器とノイズで合成する（音声ファイルなし）。 */
 
 export type SfxKind =
-  'count' | 'go' | 'boost' | 'spin' | 'stall' | 'attack' | 'goal' | 'firework' | 'fanfare';
+  | 'count'
+  | 'go'
+  | 'boost'
+  | 'spin'
+  | 'stall'
+  | 'attack'
+  | 'goal'
+  | 'firework'
+  | 'fanfare'
+  | 'overtake'
+  | 'combo'
+  | 'box'
+  | 'rare'
+  | 'fever';
 export type Sfx = {
   /** ユーザー操作のハンドラ内で呼ぶ（AudioContext の生成・resume）。 */
   unlock(): void;
-  play(kind: SfxKind): void;
-  startBgm(): void;
+  /** level は音の高さの段階（コンボの回数など）。使わない音では無視する。 */
+  play(kind: SfxKind, level?: number): void;
+  /** fast: フィーバータイム用の速いテンポ。 */
+  startBgm(fast?: boolean): void;
   stopBgm(): void;
+  /** 予約済みのものを含め、鳴っている単発音をすべて切る（スキップ時）。BGM は止めない。 */
+  cutEffects(): void;
   setMuted(muted: boolean): void;
 };
 
@@ -20,6 +37,7 @@ const ECHO_MIX = 0.28;
 const BGM_VOLUME = 0.3;
 /** BGM は 1 レース分をまとめて予約する（8 分音符の長さと個数）。 */
 const BGM_STEP = 0.2;
+const BGM_FAST_STEP = 0.13;
 const BGM_STEPS = 120;
 /** コード進行（各 8 ステップ）: Am → F → C → G。値は根音の周波数。 */
 const BGM_ROOTS = [110, 87.31, 130.81, 98] as const;
@@ -40,6 +58,8 @@ export function createSfx(createContext: () => AudioContext, muted: boolean): Sf
   let master: GainNode | null = null;
   /** 音源のつなぎ先。ここからコンプレッサーとエコーを経て master に入る。 */
   let input: AudioNode | null = null;
+  /** 単発音の束ね先。切るときは丸ごと外して作り直す。 */
+  let effects: GainNode | null = null;
   let failed = false;
   let noiseBuffer: AudioBuffer | null = null;
   let bgm: { gain: GainNode; sources: OscillatorNode[] } | null = null;
@@ -137,7 +157,7 @@ export function createSfx(createContext: () => AudioContext, muted: boolean): Sf
     tone(c, out, { freq: 90, to: 28, at, dur: 0.9, type: 'triangle', vol: vol * 0.5 });
   }
 
-  const SOUNDS: Record<SfxKind, (c: AudioContext, out: AudioNode) => void> = {
+  const SOUNDS: Record<SfxKind, (c: AudioContext, out: AudioNode, level: number) => void> = {
     count: (c, out) => {
       fat(c, out, { freq: 660, dur: 0.18, type: 'square', vol: 0.3 });
       tone(c, out, { freq: 1320, dur: 0.12, type: 'triangle', vol: 0.25 });
@@ -230,6 +250,53 @@ export function createSfx(createContext: () => AudioContext, muted: boolean): Sf
       boom(c, out, 1.6, 0.8);
       noise(c, out, 1.4, 8000, 0.3, 1.6, 'highpass');
     },
+    overtake: (c, out) => {
+      // しゅっと抜き去る音 → きらきら
+      fat(c, out, { freq: 420, to: 1680, dur: 0.22, type: 'sawtooth', vol: 0.24 });
+      noise(c, out, 0.25, 6000, 0.3, 0, 'highpass');
+      sparkle(c, out, 1318.5, 5, 0.12);
+    },
+    combo: (c, out, level) => {
+      // 回数が増えるほど半音ずつ高くなる
+      const freq = 660 * 2 ** (Math.min(level, 14) / 12);
+      tone(c, out, { freq, dur: 0.1, type: 'square', vol: 0.28 });
+      tone(c, out, { freq: freq * 1.5, at: 0.07, dur: 0.16, type: 'square', vol: 0.28 });
+      tone(c, out, { freq: freq * 2, at: 0.07, dur: 0.16, type: 'triangle', vol: 0.2 });
+    },
+    box: (c, out) => {
+      // ルーレットが回る音
+      for (let n = 0; n < 9; n++) {
+        tone(c, out, {
+          freq: n % 2 === 0 ? 1046.5 : 1318.5,
+          at: n * 0.12,
+          dur: 0.06,
+          type: 'square',
+          vol: 0.2,
+        });
+      }
+      noise(c, out, 0.12, 5000, 0.3, 0, 'highpass');
+    },
+    rare: (c, out) => {
+      // 当たりのジングル
+      melody(c, out, [
+        [783.99, 0, 0.1],
+        [1046.5, 0.09, 0.1],
+        [1318.5, 0.18, 0.1],
+        [1567.98, 0.27, 0.5],
+      ]);
+      sparkle(c, out, 2093, 12, 0.27);
+      boom(c, out, 0.27, 0.6);
+    },
+    fever: (c, out) => {
+      // せり上がり → 一発
+      fat(c, out, { freq: 110, to: 1760, dur: 0.9, type: 'sawtooth', vol: 0.22 });
+      noise(c, out, 0.9, 8000, 0.3, 0, 'highpass');
+      for (const freq of [523.25, 659.25, 783.99, 1046.5]) {
+        fat(c, out, { freq, at: 0.9, dur: 0.8, type: 'sawtooth', vol: 0.14 });
+      }
+      boom(c, out, 0.9, 1);
+      sparkle(c, out, 1046.5, 12, 0.9);
+    },
   };
 
   function stopBgm() {
@@ -249,6 +316,18 @@ export function createSfx(createContext: () => AudioContext, muted: boolean): Sf
   /** 音を鳴らせる状態なら AudioContext と出力先を返す。 */
   function output(): { c: AudioContext; out: AudioNode } | null {
     return ctx && input && !muted ? { c: ctx, out: input } : null;
+  }
+
+  /** 単発音の出力先。 */
+  function effectsOutput(): { c: AudioContext; out: AudioNode } | null {
+    const o = output();
+    if (!o) return null;
+    if (!effects) {
+      effects = o.c.createGain();
+      effects.gain.value = 1;
+      effects.connect(o.out);
+    }
+    return { c: o.c, out: effects };
   }
 
   /**
@@ -295,20 +374,22 @@ export function createSfx(createContext: () => AudioContext, muted: boolean): Sf
         ctx = null;
         master = null;
         input = null;
+        effects = null;
       }
     },
-    play(kind) {
-      const o = output();
+    play(kind, level = 0) {
+      const o = effectsOutput();
       if (!o) return;
       try {
-        SOUNDS[kind](o.c, o.out);
+        SOUNDS[kind](o.c, o.out, level);
       } catch {
         // 音の失敗で演出を止めない
       }
     },
-    startBgm() {
+    startBgm(fast = false) {
       const o = output();
       if (!o || bgm) return;
+      const stepLength = fast ? BGM_FAST_STEP : BGM_STEP;
       try {
         const gain = o.c.createGain();
         gain.gain.value = BGM_VOLUME;
@@ -317,13 +398,13 @@ export function createSfx(createContext: () => AudioContext, muted: boolean): Sf
         bgm = { gain, sources };
         for (let step = 0; step < BGM_STEPS; step++) {
           const root = BGM_ROOTS[Math.floor(step / 8) % BGM_ROOTS.length]!;
-          const at = step * BGM_STEP;
+          const at = step * stepLength;
           sources.push(
-            tone(o.c, gain, { freq: root, at, dur: BGM_STEP * 0.9, type: 'square', vol: 0.3 }),
+            tone(o.c, gain, { freq: root, at, dur: stepLength * 0.9, type: 'square', vol: 0.3 }),
             tone(o.c, gain, {
               freq: root * 2 * BGM_ARP[step % BGM_ARP.length]!,
               at,
-              dur: BGM_STEP * 0.8,
+              dur: stepLength * 0.8,
               type: 'triangle',
               vol: 0.28,
             }),
@@ -334,6 +415,10 @@ export function createSfx(createContext: () => AudioContext, muted: boolean): Sf
       }
     },
     stopBgm,
+    cutEffects() {
+      effects?.disconnect();
+      effects = null;
+    },
     setMuted(next) {
       muted = next;
       // 鳴り始めた単発音もすぐ消えるよう、出口の音量で切る

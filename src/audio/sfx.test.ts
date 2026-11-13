@@ -7,6 +7,8 @@ function fakeAudio() {
   /** つないだ順の記録（[元, 先]）。 */
   const links: [unknown, unknown][] = [];
   const destination = {};
+  /** 音源の開始時刻（予約した順）。 */
+  const starts: number[] = [];
   /** 作られた順のノード。最初の 1 つが全体音量。 */
   const created: { gain: { value: number } }[] = [];
   const param = () => ({
@@ -31,8 +33,10 @@ function fakeAudio() {
       threshold: param(),
       ratio: param(),
       delayTime: param(),
-      disconnect: () => undefined,
-      start: () => undefined,
+      disconnect: () => {
+        for (let i = links.length - 1; i >= 0; i--) if (links[i]![0] === made) links.splice(i, 1);
+      },
+      start: (at?: number) => void starts.push(at ?? 0),
       stop: () => void stats.stops++,
     };
     created.push(made);
@@ -77,7 +81,7 @@ function fakeAudio() {
     }
     return false;
   };
-  return { stats, createContext, created, links, destination, reaches };
+  return { stats, createContext, created, links, destination, reaches, starts };
 }
 
 const KINDS: SfxKind[] = [
@@ -90,6 +94,11 @@ const KINDS: SfxKind[] = [
   'goal',
   'firework',
   'fanfare',
+  'overtake',
+  'combo',
+  'box',
+  'rare',
+  'fever',
 ];
 
 describe('createSfx', () => {
@@ -213,6 +222,35 @@ describe('createSfx', () => {
     // 出口へは全体音量からしかつながない（ミュートで響きの残りも消える）
     expect(links.filter(([, to]) => to === destination).map(([from]) => from)).toEqual([master]);
   });
+  it('cutEffects で予約済みの単発音が出口から切り離され、そのあとの音はまた鳴る', () => {
+    const { createContext, links, destination, reaches } = fakeAudio();
+    const sfx = createSfx(() => createContext(), false);
+    sfx.unlock();
+    let before = links.length;
+    sfx.play('fever');
+    const old = links.slice(before).map(([from]) => from);
+    expect(old.every((source) => reaches(source, destination))).toBe(true);
+    sfx.cutEffects();
+    expect(old.some((source) => reaches(source, destination))).toBe(false);
+    before = links.length;
+    sfx.play('fanfare');
+    const fresh = links.slice(before).map(([from]) => from);
+    expect(fresh.length).toBeGreaterThan(0);
+    expect(fresh.every((source) => reaches(source, destination))).toBe(true);
+  });
+  it('cutEffects は BGM を止めない。unlock 前に呼んでも何もしない', () => {
+    const { stats, createContext, links, destination, reaches } = fakeAudio();
+    const sfx = createSfx(() => createContext(), false);
+    sfx.cutEffects();
+    sfx.unlock();
+    const before = links.length;
+    sfx.startBgm();
+    const bgm = links.slice(before).map(([from]) => from);
+    const stops = stats.stops;
+    sfx.cutEffects();
+    expect(stats.stops).toBe(stops);
+    expect(bgm.every((source) => reaches(source, destination))).toBe(true);
+  });
   it('コンプレッサーやディレイが無い環境でも鳴らせる', () => {
     const { stats, createContext } = fakeAudio();
     const sfx = createSfx(() => createContext(false), false);
@@ -220,5 +258,42 @@ describe('createSfx', () => {
     const before = stats.nodes;
     for (const kind of KINDS) sfx.play(kind);
     expect(stats.nodes).toBeGreaterThan(before);
+  });
+  it('速い BGM は、同じ音数を短い時間に詰めて予約する', () => {
+    const span = (fast: boolean) => {
+      const { createContext, starts } = fakeAudio();
+      const sfx = createSfx(() => createContext(), false);
+      sfx.unlock();
+      const before = starts.length;
+      sfx.startBgm(fast);
+      const times = starts.slice(before);
+      return { count: times.length, last: Math.max(...times) };
+    };
+    const normal = span(false);
+    const fast = span(true);
+    expect(fast.count).toBe(normal.count);
+    expect(fast.last).toBeLessThan(normal.last * 0.8);
+  });
+  it('コンボ音は回数が増えるほど高くなる', () => {
+    const pitch = (level: number) => {
+      const { createContext, created } = fakeAudio();
+      const seen: number[] = [];
+      const context = createContext();
+      const makeOsc = context.createOscillator.bind(context);
+      context.createOscillator = () => {
+        const osc = makeOsc();
+        osc.frequency.setValueAtTime = ((value: number) => {
+          seen.push(value);
+          return osc.frequency;
+        }) as typeof osc.frequency.setValueAtTime;
+        return osc;
+      };
+      const sfx = createSfx(() => context, false);
+      sfx.unlock();
+      sfx.play('combo', level);
+      void created;
+      return Math.max(...seen);
+    };
+    expect(pitch(6)).toBeGreaterThan(pitch(2));
   });
 });

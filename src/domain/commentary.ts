@@ -63,6 +63,12 @@ export const TEMPLATES: Record<CommentaryKind, readonly string[]> = {
     '{name}、鮮やかな追い抜き！ 根回しが効いている！',
     '{name}、するすると順位を上げる！',
   ],
+  surge: [
+    '最後尾の{name}が動いた！ まとめてごぼう抜きだ！',
+    '{name}、最下位から怒涛の追い上げ！ 止まらない、止まらない！',
+    'ビリだった{name}が一気に来た！ 何人抜いた！？',
+    '{name}、ここで本気を出した！ 後ろから全部持っていく！',
+  ],
   attack: [
     '{from}の{item}が{name}に直撃！ 容赦がない！',
     '{from}、{item}を発射！ {name}が吹き飛んだ！',

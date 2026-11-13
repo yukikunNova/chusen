@@ -117,9 +117,74 @@ describe('buildRaceScript', () => {
       for (const e of events.slice(1, n >= 3 ? -1 : undefined)) {
         expect(e.t).toBeGreaterThanOrEqual(5.1);
         expect(e.t).toBeLessThanOrEqual(18);
-        expect(['boost', 'spin', 'weave', 'stall', 'overtake', 'attack']).toContain(e.kind);
+        expect(['boost', 'spin', 'weave', 'stall', 'overtake', 'attack', 'surge']).toContain(
+          e.kind,
+        );
       }
     }
+  });
+  it('4 人以上なら、最下位から 2 秒で 3 人以上を抜く「ごぼう抜き」が 1 回ある', () => {
+    const bad: string[] = [];
+    for (const n of [4, 5, 6, 7, 8, 10, 15, 20]) {
+      for (let seed = 1; seed <= 300; seed++) {
+        const s = build(n, seed);
+        const surges = s.events.filter((e) => e.kind === 'surge');
+        if (surges.length !== 1) {
+          bad.push(`n=${n} seed=${seed}: ${surges.length} 回`);
+          continue;
+        }
+        const { t, racer } = surges[0]!;
+        const before = rankingAt(s, t).indexOf(racer);
+        const after = rankingAt(s, t + 2).indexOf(racer);
+        if (before !== n - 1) bad.push(`n=${n} seed=${seed}: 開始時 ${before + 1} 位`);
+        if (before - after < 3) bad.push(`n=${n} seed=${seed}: ${before - after} 人抜き`);
+      }
+    }
+    expect(bad).toEqual([]);
+  });
+  it('ごぼう抜きの前の進み方（出遅れなどの速さの差）は消さない', () => {
+    const bad: string[] = [];
+    for (const n of [4, 8, 20]) {
+      for (let seed = 1; seed <= 100; seed++) {
+        const s = build(n, seed);
+        const surge = s.events.find((e) => e.kind === 'surge')!;
+        const keys = s.racers[surge.racer]!.keys;
+        // 開始までの 2 秒刻みの節目が残っている
+        for (let t = 3; t < surge.t; t += 2) {
+          if (!keys.some((k) => k.t === t)) bad.push(`n=${n} seed=${seed}: ${t} 秒の節目がない`);
+        }
+        for (let k = 1; k < keys.length; k++) {
+          if (keys[k]!.t <= keys[k - 1]!.t) bad.push(`n=${n} seed=${seed}: 時刻が逆転`);
+          if (keys[k]!.p < keys[k - 1]!.p) bad.push(`n=${n} seed=${seed}: 後戻り`);
+        }
+      }
+    }
+    expect(bad.slice(0, 5)).toEqual([]);
+  });
+  it('3 人以下ではごぼう抜きなし', () => {
+    for (const n of [1, 2, 3]) {
+      for (const seed of SEEDS) {
+        expect(build(n, seed).events.filter((e) => e.kind === 'surge')).toEqual([]);
+      }
+    }
+  });
+  it('順位の入れ替わりが多く、終盤（19〜23 秒）にも起きる', () => {
+    /** from〜to 秒の間に、暫定順位の並びが変わった回数。 */
+    const changes = (n: number, seed: number, from: number, to: number) => {
+      const s = build(n, seed);
+      let count = 0;
+      let prev = rankingAt(s, from).join();
+      for (let t = from + 0.25; t <= to; t += 0.25) {
+        const cur = rankingAt(s, t).join();
+        if (cur !== prev) count++;
+        prev = cur;
+      }
+      return count;
+    };
+    const mean = (from: number, to: number) =>
+      SEEDS.reduce((sum, seed) => sum + changes(6, seed, from, to), 0) / SEEDS.length;
+    expect(mean(4, 19)).toBeGreaterThanOrEqual(14);
+    expect(mean(19, 23)).toBeGreaterThanOrEqual(3);
   });
   it('2 人以上なら攻撃が最低 1 回あり、攻撃者は被弾者と別の機体', () => {
     for (const { n, seed } of cases) {

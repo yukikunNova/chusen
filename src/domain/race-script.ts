@@ -18,12 +18,14 @@ export type RaceEventKind =
   | 'stall'
   | 'overtake'
   | 'attack'
+  | 'surge'
   | 'finalComeback';
 /** 攻撃アイテム。missile: 一直線、bomb: 山なり、thunder: 上空から。 */
 export type AttackItem = 'missile' | 'bomb' | 'thunder';
 /**
  * racer は最終順位の添字（0 が 1 着）。
  * kind が 'attack' のときだけ from（攻撃した機体）と item が付き、racer は被弾した機体。
+ * kind が 'surge' は最下位からのごぼう抜き。t の時点で最下位、2 秒後までに 3 人以上を抜く。
  */
 export type RaceEvent = {
   t: number;
@@ -45,7 +47,15 @@ const MID_GAP = 1.8;
 const COMEBACK_TIME = 20;
 const COMEBACK_KEY_TIME = 21;
 const MAX_FINISH_GAP = 0.6;
-const KEY_TIMES = [3, 7, 11, 15, 19] as const;
+/** 進行度の節目。細かく刻むほど、区間ごとの速さの差で順位が入れ替わる。 */
+const KEY_TIMES = [3, 5, 7, 9, 11, 13, 15, 17, 19] as const;
+/** 終盤にもう一度順位を揺らす節目。 */
+const LATE_KEY_TIME = 21;
+/** ごぼう抜きに使う時間と、始めてよい最も遅い時刻（中盤イベントの最初の枠は必ずこれ以前に来る）。 */
+export const SURGE_DURATION = 2;
+const SURGE_LATEST = 12.6;
+const SURGE_MIN_RACERS = 4;
+const SURGE_PASSED = 3;
 const MID_KINDS = ['boost', 'spin', 'weave', 'stall', 'overtake', 'attack'] as const;
 const ATTACK_ITEMS = ['missile', 'bomb', 'thunder'] as const;
 const FAST: readonly RaceEventKind[] = ['rocketStart', 'boost', 'overtake'];
@@ -87,7 +97,21 @@ function buildEvents(n: number, rand: Rand): RaceEvent[] {
   let pool: number[] = [];
   // 攻撃は相手が要る。2 人以上なら毎レース最低 1 回は起こす
   const canAttack = n >= 2;
-  const forcedAttack = canAttack ? randInt(rand, count) : -1;
+  const times = offsets.map((offset, i) => MID_START + i * MID_GAP + offset);
+  // ごぼう抜きにする枠。遅すぎると抜く余地がなくなるので、SURGE_LATEST までで最も遅い枠にする
+  const surgeSlot =
+    n >= SURGE_MIN_RACERS
+      ? Math.max(
+          0,
+          times.findLastIndex((t) => t <= SURGE_LATEST),
+        )
+      : -1;
+  // 攻撃を必ず入れる枠は、ごぼう抜きの枠を避ける
+  let forcedAttack = -1;
+  if (canAttack) {
+    forcedAttack = randInt(rand, surgeSlot < 0 ? count : count - 1);
+    if (surgeSlot >= 0 && forcedAttack >= surgeSlot) forcedAttack++;
+  }
   for (let i = 0; i < count; i++) {
     if (pool.length === 0) {
       pool = shuffled(
@@ -95,10 +119,11 @@ function buildEvents(n: number, rand: Rand): RaceEvent[] {
         rand,
       );
     }
-    const t = MID_START + i * MID_GAP + offsets[i]!;
+    const t = times[i]!;
     const racer = pool.pop()!;
     let kind: RaceEventKind = MID_KINDS[randInt(rand, MID_KINDS.length)]!;
-    if (i === forcedAttack) kind = 'attack';
+    if (i === surgeSlot) kind = 'surge';
+    else if (i === forcedAttack) kind = 'attack';
     else if (kind === 'attack' && !canAttack) kind = 'spin';
     if (kind === 'attack') {
       // 被弾者以外から攻撃者を選ぶ
@@ -131,7 +156,7 @@ export function buildRaceScript(
     // 区間ごとの進み具合。イベントのある区間は速く／遅くする
     const weights = KEY_TIMES.slice(1).map((end, seg) => {
       const startT = KEY_TIMES[seg]!;
-      let w = 0.8 + rand() * 0.4;
+      let w = 0.6 + rand() * 0.8;
       for (const e of events) {
         if (e.racer !== i || e.t < startT || e.t >= end) continue;
         if (FAST.includes(e.kind)) w *= 1.6;
@@ -150,12 +175,46 @@ export function buildRaceScript(
     if (events.some((e) => e.kind === 'finalComeback' && e.racer === i)) {
       // 最終コーナー前半は溜め、後半で一気に伸びる
       keys.push({ t: COMEBACK_KEY_TIME, p: p19 + (1 - p19) * 0.3 });
+    } else {
+      // 直線で結んだ場合の位置から前後にずらし、終盤の順位を揺らす
+      const straight =
+        (LATE_KEY_TIME - TIMELINE.finalCornerStart) / (finishTime - TIMELINE.finalCornerStart);
+      keys.push({ t: LATE_KEY_TIME, p: p19 + (1 - p19) * straight * (0.7 + rand() * 0.6) });
     }
     keys.push({ t: finishTime, p: 1 });
     return { id, name, finishTime, keys };
   });
 
+  applySurge(racers, events);
   return { racers, events };
+}
+
+/**
+ * ごぼう抜きの機体の進み方を作り直す。開始時刻に最下位、SURGE_DURATION 秒後に 3 人以上を抜いた位置にする。
+ * 最終コーナー入口以降の位置は変えないので、最終順位には影響しない。
+ */
+function applySurge(racers: Racer[], events: readonly RaceEvent[]) {
+  const surge = events.find((e) => e.kind === 'surge');
+  const racer = surge && racers[surge.racer];
+  if (!surge || !racer) return;
+  const t0 = surge.t;
+  const t1 = t0 + SURGE_DURATION;
+  const others = racers.filter((r) => r !== racer);
+  const at = (t: number) => others.map((r) => progressAt(r, t)).sort((a, b) => a - b);
+  const corner = progressAt(racer, TIMELINE.finalCornerStart);
+  const low = at(t0)[0]! * 0.85;
+  // 下から SURGE_PASSED 人目より少し前へ出る。最終コーナー入口の位置は超えない
+  const passed = at(t1)[SURGE_PASSED - 1]!;
+  const high = Math.min(corner, Math.max(low, passed + (corner - passed) * 0.15));
+  // 開始前の進み方（出遅れなどの速さの差）は、形を保ったまま開始位置につながるよう縮める
+  const original = progressAt(racer, t0);
+  const scale = original > 0 ? low / original : 0;
+  racer.keys = [
+    ...racer.keys.filter((k) => k.t < t0).map((k) => ({ t: k.t, p: k.p * scale })),
+    { t: t0, p: low },
+    { t: t1, p: high },
+    ...racer.keys.filter((k) => k.t > t1).map((k) => ({ t: k.t, p: Math.max(k.p, high) })),
+  ];
 }
 
 /** 時刻 t の進行度（線形補間）。スタート前は 0、ゴール後は 1。 */

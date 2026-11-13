@@ -65,6 +65,7 @@ const EVENT_SOUND: Record<RaceEventKind, SfxKind> = {
   weave: 'stall',
   stall: 'stall',
   attack: 'attack',
+  surge: 'boost',
 };
 /** 一斉打ち上げで炸裂音が重なりすぎないよう、間隔を空ける（ミリ秒）。 */
 const FIREWORK_SOUND_GAP = 90;
@@ -83,19 +84,41 @@ let hud: Hud | null = null;
 let muted = false;
 /** レース中で BGM を鳴らすべき区間か（ミュート解除時に鳴らし直すため）。 */
 let bgmWanted = false;
+/** フィーバータイムの速い BGM か。 */
+let bgmFast = false;
 const hooks: RaceHooks = {
   onCount: () => sfx.play('count'),
   onGo: () => {
     sfx.play('go');
     bgmWanted = true;
+    bgmFast = false;
     sfx.startBgm();
+  },
+  onHighlight: (highlight) => {
+    if (highlight.kind === 'overtake') sfx.play('overtake');
+    if (highlight.combo >= 2) sfx.play('combo', highlight.combo);
+  },
+  onBox: (phase, box) => {
+    if (phase === 'pick') sfx.play('box');
+    else if (box.rarity !== 'white') sfx.play('rare');
+  },
+  onFever: () => {
+    sfx.play('fever');
+    // BGM は予約済みなので、止めて速いテンポで鳴らし直す
+    bgmFast = true;
+    sfx.stopBgm();
+    sfx.startBgm(true);
   },
   onEvent: (event) => sfx.play(EVENT_SOUND[event.kind]),
   onEnd: (skipped) => {
     bgmWanted = false;
     sfx.stopBgm();
-    // スキップ時は 1 着ゴールを通らないので、ここで鳴らす
-    if (skipped) sfx.play('fanfare');
+    if (skipped) {
+      // 予約済みの音（フィーバーの一発など）が結果画面で鳴らないよう切る
+      sfx.cutEffects();
+      // スキップ時は 1 着ゴールを通らないので、ここで鳴らす
+      sfx.play('fanfare');
+    }
   },
   onFirstFinish: () => {
     bgmWanted = false;
@@ -165,7 +188,7 @@ app = createApp({
   onMutedChange: (value) => {
     muted = value;
     sfx.setMuted(value);
-    if (!value && bgmWanted) sfx.startBgm();
+    if (!value && bgmWanted) sfx.startBgm(bgmFast);
     hud?.setMuted(value);
   },
 });

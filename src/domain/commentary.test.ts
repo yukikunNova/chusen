@@ -21,6 +21,7 @@ describe('TEMPLATES', () => {
         'spin',
         'stall',
         'start',
+        'surge',
         'weave',
       ].sort(),
     );
