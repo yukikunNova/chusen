@@ -50,7 +50,8 @@ function shuffledIndices(count: number): number[] {
   return out;
 }
 
-export function createRockets(stage: Stage, names: readonly string[]): Rockets {
+/** gold: 全機を金色にする（激レア回「黄金レース」）。 */
+export function createRockets(stage: Stage, names: readonly string[], gold = false): Rockets {
   const count = names.length;
   const group = new THREE.Group();
   const tags = new THREE.Group();
@@ -69,14 +70,17 @@ export function createRockets(stage: Stage, names: readonly string[]): Rockets {
   const kinds = pickVehicles(count, Math.random);
 
   const rockets: Rocket[] = names.map((name, i) => {
-    const color = new THREE.Color().setHSL(hues[i]! / count, 0.95, 0.56);
+    // 金色の回も、見分けがつくよう色合いと明るさを少しずつ変える
+    const color = gold
+      ? new THREE.Color().setHSL(0.1 + (hues[i]! / count) * 0.05, 1, 0.5 + (i % 3) * 0.05)
+      : new THREE.Color().setHSL(hues[i]! / count, 0.95, 0.56);
     const bodyMaterial = keep(
       new THREE.MeshStandardMaterial({
         color,
         emissive: color,
-        emissiveIntensity: 0.34,
-        roughness: 0.4,
-        metalness: 0.25,
+        emissiveIntensity: gold ? 0.5 : 0.34,
+        roughness: gold ? 0.22 : 0.4,
+        metalness: gold ? 0.85 : 0.25,
       }),
     );
 

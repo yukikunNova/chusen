@@ -23,6 +23,8 @@ export type Fireworks = {
   /** 大玉を一斉に打ち上げる。 */
   salvo(): void;
   burstConfetti(): void;
+  /** 紙吹雪を金色だけにする（激レア回「黄金レース」）。次に撒く分から変わる。 */
+  setGold(on: boolean): void;
   dispose(): void;
 };
 
@@ -43,6 +45,7 @@ const CONFETTI_COUNT = 520;
 const SALVO = 6;
 const BIG_RATE = 0.3;
 const CONFETTI_COLORS = [0xff2e93, 0x29e0ff, 0xffd60a, 0x9d4dff, 0x4dff88, 0xffffff];
+const CONFETTI_GOLD = [0xffd60a, 0xffb703, 0xfff3b0, 0xff9f1c];
 
 export function createFireworks(stage: Stage, onBurst?: () => void): Fireworks {
   const positions = new Float32Array(MAX_PARTICLES * 3).fill(1e6);
@@ -227,6 +230,7 @@ export function createFireworks(stage: Stage, onBurst?: () => void): Fireworks {
     if (burstSoundAllowed(sinceFirst)) onBurst?.();
   }
 
+  let confettiColorSet: readonly number[] = CONFETTI_COLORS;
   function resetConfetti() {
     const color = new THREE.Color();
     for (let i = 0; i < CONFETTI_COUNT; i++) {
@@ -234,7 +238,7 @@ export function createFireworks(stage: Stage, onBurst?: () => void): Fireworks {
         [(Math.random() - 0.5) * 46, 10 + Math.random() * 26, -9 - Math.random() * 22],
         i * 3,
       );
-      color.set(CONFETTI_COLORS[i % CONFETTI_COLORS.length]!);
+      color.set(confettiColorSet[i % confettiColorSet.length]!);
       confettiColors.set([color.r, color.g, color.b], i * 3);
       confettiPhase[i] = Math.random() * Math.PI * 2;
       confettiSpeed[i] = 5 + Math.random() * 5;
@@ -338,6 +342,9 @@ export function createFireworks(stage: Stage, onBurst?: () => void): Fireworks {
     },
     salvo() {
       for (let n = 0; n < SALVO; n++) launch(true);
+    },
+    setGold(on) {
+      confettiColorSet = on ? CONFETTI_GOLD : CONFETTI_COLORS;
     },
     burstConfetti() {
       resetConfetti();

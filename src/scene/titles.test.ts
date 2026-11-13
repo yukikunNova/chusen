@@ -106,4 +106,9 @@ describe('buildSummary', () => {
     expect(summary.courseName).toBeNull();
     expect(summary.photoGap).toBeNull();
   });
+  it('激レア回の種類をまとめに入れる。指定が無ければ通常回', () => {
+    const script = buildRaceScript(order(3), createRand(5));
+    expect(buildSummary(script, 'ネオン峠', 'meteor').rare).toBe('meteor');
+    expect(buildSummary(script, 'ネオン峠').rare).toBeNull();
+  });
 });

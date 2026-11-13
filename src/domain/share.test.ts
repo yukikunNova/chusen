@@ -17,6 +17,7 @@ const summary = (n: number, over: Partial<RaceSummary> = {}): RaceSummary => ({
     i === 0 ? 'ドパ値MVP' : i === n - 1 ? '大トリ' : null,
   ),
   photoGap: null,
+  rare: null,
   ...over,
 });
 
@@ -109,5 +110,19 @@ describe('postUrl', () => {
     expect(url.origin).toBe('https://x.com');
     expect(url.pathname).toBe('/intent/post');
     expect(url.searchParams.get('text')).toBe('こんにちは #ドパ抽\nhttps://example.com/');
+  });
+});
+
+describe('激レア回の共有', () => {
+  it('激レア回は、画像の中身と投稿文に呼び名と出現率を入れる', () => {
+    const model = buildShareModel(names(3), summary(3, { rare: 'gold' }), false);
+    expect(model.rare).toBe('激レア回「黄金レース」（出現率1%）');
+    expect(shareText(model)).toContain('🌈 激レア回「黄金レース」（出現率1%）');
+  });
+  it('通常回には入れない', () => {
+    const model = buildShareModel(names(3), summary(3), false);
+    expect(model.rare).toBeNull();
+    expect(shareText(model)).not.toContain('激レア');
+    expect(buildShareModel(names(3), null, false).rare).toBeNull();
   });
 });

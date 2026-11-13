@@ -1,3 +1,4 @@
+import { rareLine } from '../domain/rare';
 import { formatGap, formatScore } from '../domain/share';
 import type { RaceSummary } from '../domain/summary';
 import { el } from './dom';
@@ -86,6 +87,7 @@ export function mountResultView(
 
   // レースのまとめ（コース名・ドパ値・写真判定）
   const facts: string[] = [];
+  if (summary?.rare) facts.push(`🌈 ${rareLine(summary.rare)}`);
   if (summary?.courseName) facts.push(`コース: ${summary.courseName}`);
   if (summary && summary.score > 0) facts.push(`ドパ値 ${formatScore(summary.score)}`);
   if (summary && summary.photoGap !== null) {

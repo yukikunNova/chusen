@@ -166,15 +166,27 @@ function drawFooter(ctx: CanvasRenderingContext2D, model: ShareModel) {
   ctx.font = font(30);
   ctx.fillStyle = PINK;
   ctx.fillText(SHARE_TAG, MARGIN, 636);
+  // タグの右に「ほか N 人」と激レア回の刻印を並べ、右端の URL に重ならない幅に収める
+  let left = MARGIN + 150;
   if (model.more > 0) {
+    const more = `ほか ${model.more} 人`;
     ctx.font = font(24, 700);
     ctx.fillStyle = 'rgb(255 255 255 / 80%)';
-    ctx.fillText(`ほか ${model.more} 人`, MARGIN + 150, 634);
+    ctx.fillText(more, left, 634);
+    left += ctx.measureText(more).width + 28;
+  }
+  const url = SHARE_URL.replace(/^https:\/\//, '').replace(/\/$/, '');
+  ctx.font = font(22, 700);
+  const urlLeft = CARD_WIDTH - MARGIN - ctx.measureText(url).width;
+  if (model.rare) {
+    ctx.font = font(24);
+    ctx.fillStyle = GOLD;
+    ctx.fillText(fit(ctx, `🌈 ${model.rare}`, urlLeft - 24 - left), left, 634);
   }
   ctx.textAlign = 'right';
   ctx.font = font(22, 700);
   ctx.fillStyle = 'rgb(255 255 255 / 65%)';
-  ctx.fillText(SHARE_URL.replace(/^https:\/\//, '').replace(/\/$/, ''), CARD_WIDTH - MARGIN, 634);
+  ctx.fillText(url, CARD_WIDTH - MARGIN, 634);
 }
 
 export function drawShareCard(ctx: CanvasRenderingContext2D, model: ShareModel) {

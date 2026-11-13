@@ -3,6 +3,7 @@ import { createApp, type App, type RaceRunner } from './app';
 import { createSfx, type SfxKind } from './audio/sfx';
 import { buildCommentary } from './domain/commentary';
 import { createRand } from './domain/prng';
+import { RARE_LABELS, drawRare, type RareKind } from './domain/rare';
 import { buildRaceScript, drawPhotoGap, type RaceEventKind } from './domain/race-script';
 import { cryptoRandomInt } from './domain/shuffle';
 import { beginCapture } from './media/replay-capture';
@@ -104,6 +105,8 @@ let muted = false;
 let bgmWanted = false;
 /** フィーバータイムの速い BGM か。 */
 let bgmFast = false;
+/** いまのレースの激レア回の種類。通常回は null。 */
+let rare: RareKind | null = null;
 /** いまのレースのリプレイ動画の録画。3D が使えない回は null。 */
 let replay: ReplaySession | null = null;
 /** 終わったレースの動画（できあがりを待つ）。 */
@@ -121,9 +124,11 @@ const hooks: RaceHooks = {
   onGo: () => {
     sfx.play('go');
     bgmWanted = true;
-    bgmFast = false;
-    sfx.startBgm();
+    // 全編フィーバーの回は、最初から速いテンポ
+    bgmFast = rare === 'fever';
+    sfx.startBgm(bgmFast);
   },
+  onRare: () => sfx.play('rare'),
   onHighlight: (highlight) => {
     if (highlight.kind === 'overtake') sfx.play('overtake');
     if (highlight.combo >= 2) sfx.play('combo', highlight.combo);
@@ -134,6 +139,7 @@ const hooks: RaceHooks = {
   },
   onFever: () => {
     sfx.play('fever');
+    if (bgmFast) return;
     // BGM は予約済みなので、止めて速いテンポで鳴らし直す
     bgmFast = true;
     sfx.stopBgm();
@@ -176,6 +182,8 @@ const runRace: RaceRunner = (order, onDone) => {
   // 演出用の乱数。順位は order で確定済みで、ここでは変わらない
   const seed = Date.now();
   if (!stage) {
+    // 簡易表示には見た目の変化が無いので、激レア回にはしない
+    rare = null;
     // 簡易表示でも、称号とドパ値は同じ台本から決める
     const summary = buildSummary(buildRaceScript(order, createRand(seed)), null);
     return runSimpleReveal(
@@ -194,7 +202,11 @@ const runRace: RaceRunner = (order, onDone) => {
   const course = generateCourse(createRand(seed + 3));
   track?.dispose();
   track = createTrack(stage, course);
-  const summary = buildSummary(script, course.name);
+  // 激レア回の抽選も別の乱数で引く（見た目だけで、順位・ドパ値・称号は変わらない）
+  rare = drawRare(createRand(seed + 5));
+  const raceRare = rare;
+  fireworks?.setGold(raceRare === 'gold');
+  const summary = buildSummary(script, course.name, raceRare);
   const raceHud = mountHud(
     root,
     { onSkip: () => app?.skip(), onToggleMute: () => app?.setMuted(!muted) },
@@ -204,17 +216,31 @@ const runRace: RaceRunner = (order, onDone) => {
   replayResult = null;
   replay = createReplaySession({
     script,
-    begin: () => beginCapture(stage.renderer.domElement, sfx.recordingStream(), course.name),
+    begin: () =>
+      beginCapture(
+        stage.renderer.domElement,
+        sfx.recordingStream(),
+        course.name,
+        raceRare ? RARE_LABELS[raceRare] : null,
+      ),
     onAfterRender: stage.onAfterRender,
     onHidden: onTabHidden,
   });
-  return playRace(stage, script, cues, raceHud, hooks, () => {
-    raceHud.destroy();
-    if (hud === raceHud) hud = null;
-    const video = replayResult;
-    replayResult = null;
-    onDone(summary, video ?? undefined);
-  });
+  return playRace(
+    stage,
+    script,
+    cues,
+    raceHud,
+    hooks,
+    () => {
+      raceHud.destroy();
+      if (hud === raceHud) hud = null;
+      const video = replayResult;
+      replayResult = null;
+      onDone(summary, video ?? undefined);
+    },
+    raceRare,
+  );
 };
 
 app = createApp({

@@ -1,3 +1,4 @@
+import { rareLine } from './rare';
 import type { RaceSummary } from './summary';
 
 /** 結果を X などで共有するための中身（画像に描く内容と投稿文）。 */
@@ -16,6 +17,8 @@ export type ShareModel = {
   courseName: string | null;
   score: number;
   photoGap: number | null;
+  /** 激レア回の 1 行（呼び名と出現率）。通常回は null。 */
+  rare: string | null;
   rows: ShareRow[];
   /** 画像に載せきれなかった人数。 */
   more: number;
@@ -51,6 +54,7 @@ export function buildShareModel(
     courseName: summary?.courseName ?? null,
     score: summary?.score ?? 0,
     photoGap: summary?.photoGap ?? null,
+    rare: summary?.rare ? rareLine(summary.rare) : null,
     rows,
     more: names.length - rows.length,
   };
@@ -83,6 +87,7 @@ export function shareText(model: ShareModel): string {
   if (model.courseName) facts.push(`コース: ${model.courseName}`);
   if (facts.length > 0) lines.push(facts.join(' / '));
   if (model.photoGap !== null) lines.push(`📸 写真判定 ${formatGap(model.photoGap)}`);
+  if (model.rare) lines.push(`🌈 ${model.rare}`);
   lines.push(SHARE_TAG, SHARE_URL);
   return lines.join('\n');
 }

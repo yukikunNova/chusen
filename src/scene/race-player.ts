@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { Cue } from '../domain/commentary';
+import { RARE_LABELS, type RareKind } from '../domain/rare';
 import {
   TIMELINE,
   progressAt,
@@ -26,12 +27,14 @@ import {
   buildBoxes,
   buildHighlights,
   isFever,
+  isFeverLook,
   photoState,
   type Box,
   type Highlight,
 } from './hype';
 import { createItemBoxes } from './item-boxes';
 import { laneOffset } from './layout';
+import { createMeteors } from './meteors';
 import { createRaceClock, createTimeWarp } from './race-clock';
 import { createRockets } from './rockets';
 import type { Stage } from './stage';
@@ -48,6 +51,8 @@ export type RaceHooks = {
   onBox?(phase: 'pick' | 'reveal', box: Box): void;
   /** フィーバータイムに入った瞬間。 */
   onFever?(): void;
+  /** 激レア回の告知を出した。 */
+  onRare?(kind: RareKind): void;
   /** 写真判定のスローに入った。 */
   onPhoto?(): void;
   /** 毎フレーム、レース内の時刻を知らせる（リプレイ動画の録画用）。 */
@@ -59,6 +64,8 @@ export type RaceHooks = {
 };
 
 const GO_UNTIL = 3.8;
+/** 激レア回の告知を出す時刻。 */
+const RARE_ANNOUNCE = 0.4;
 const RANKING_INTERVAL = 0.25;
 /** ゴール後もそのまま走り抜ける速さ（進行度 / 秒）と上限。 */
 const OVERRUN_SPEED = 0.045;
@@ -101,7 +108,10 @@ export function idleCamera(stage: Stage, where: 'start' | 'goal', time: number) 
   }
 }
 
-/** 台本を実時間に沿って再生する。結果は台本で決まっており、ここでは変わらない。 */
+/**
+ * 台本を実時間に沿って再生する。結果は台本で決まっており、ここでは変わらない。
+ * rare: 激レア回の種類（見た目だけが変わる）。
+ */
 export function playRace(
   stage: Stage,
   script: RaceScript,
@@ -109,12 +119,16 @@ export function playRace(
   hud: Hud,
   hooks: RaceHooks,
   onDone: () => void,
+  rare: RareKind | null = null,
 ): { skip(): void } {
   const count = script.racers.length;
   const rockets = createRockets(
     stage,
     script.racers.map((r) => r.name),
+    rare === 'gold',
   );
+  const meteors = rare === 'meteor' ? createMeteors(stage) : null;
+  hud.setRare(rare ? RARE_LABELS[rare] : null);
   const attacks = createAttacks(stage);
   const highlights = buildHighlights(script);
   const boxes = buildBoxes(script);
@@ -172,7 +186,15 @@ export function playRace(
     if (hookDue(prevT, t, 0)) hooks.onCount?.(3);
     if (hookDue(prevT, t, 1)) hooks.onCount?.(2);
     if (hookDue(prevT, t, 2)) hooks.onCount?.(1);
-    if (hookDue(prevT, t, TIMELINE.countdownEnd)) hooks.onGo?.();
+    if (hookDue(prevT, t, TIMELINE.countdownEnd)) {
+      if (rare === 'fever') hud.showBanner('FEVER TIME!!', 'fever');
+      hooks.onGo?.();
+    }
+    if (rare && hookDue(prevT, t, RARE_ANNOUNCE)) {
+      hud.showBanner(`激レア回!! ${RARE_LABELS[rare]}`, 'fever');
+      hud.flash();
+      hooks.onRare?.(rare);
+    }
     for (const event of script.events) {
       if (!hookDue(prevT, t, event.t)) continue;
       shake = 1;
@@ -390,7 +412,7 @@ export function playRace(
     hud.setRoulette(
       !box ? null : t < box.revealT ? { name } : { name, label: box.label, rarity: box.rarity },
     );
-    hud.setFever(isFever(t) && !warp.slowAt(t));
+    hud.setFever(isFeverLook(t, rare) && !warp.slowAt(t));
     hud.setPhoto(photoState(script, t));
     itemBoxes.update(t);
   }
@@ -400,6 +422,7 @@ export function playRace(
     done = true;
     stop();
     rockets.dispose();
+    meteors?.dispose();
     attacks.dispose();
     itemBoxes.dispose();
     stage.camera.fov = BASE_FOV;

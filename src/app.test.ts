@@ -283,6 +283,7 @@ describe('結果の共有', () => {
     score: 5000,
     titles: ['ドパ値MVP', '大トリ'],
     photoGap: 0.003,
+    rare: null,
   };
   const preview = (root: HTMLElement) => one(root, 'card-preview') as HTMLImageElement;
   async function toResult(over: Parameters<typeof setup>[1] = {}) {
