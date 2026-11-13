@@ -23,6 +23,8 @@ export type Sfx = {
   /** fast: フィーバータイム用の速いテンポ。 */
   startBgm(fast?: boolean): void;
   stopBgm(): void;
+  /** 予約済みのものを含め、鳴っている単発音をすべて切る（スキップ時）。BGM は止めない。 */
+  cutEffects(): void;
   setMuted(muted: boolean): void;
 };
 
@@ -56,6 +58,8 @@ export function createSfx(createContext: () => AudioContext, muted: boolean): Sf
   let master: GainNode | null = null;
   /** 音源のつなぎ先。ここからコンプレッサーとエコーを経て master に入る。 */
   let input: AudioNode | null = null;
+  /** 単発音の束ね先。切るときは丸ごと外して作り直す。 */
+  let effects: GainNode | null = null;
   let failed = false;
   let noiseBuffer: AudioBuffer | null = null;
   let bgm: { gain: GainNode; sources: OscillatorNode[] } | null = null;
@@ -314,6 +318,18 @@ export function createSfx(createContext: () => AudioContext, muted: boolean): Sf
     return ctx && input && !muted ? { c: ctx, out: input } : null;
   }
 
+  /** 単発音の出力先。 */
+  function effectsOutput(): { c: AudioContext; out: AudioNode } | null {
+    const o = output();
+    if (!o) return null;
+    if (!effects) {
+      effects = o.c.createGain();
+      effects.gain.value = 1;
+      effects.connect(o.out);
+    }
+    return { c: o.c, out: effects };
+  }
+
   /**
    * 音源 → コンプレッサー（音割れ防止）→ master → 出口、の経路を作り、音源のつなぎ先を返す。
    * エコーも master の手前に入れるので、ミュートすれば響きの残りも消える。
@@ -358,10 +374,11 @@ export function createSfx(createContext: () => AudioContext, muted: boolean): Sf
         ctx = null;
         master = null;
         input = null;
+        effects = null;
       }
     },
     play(kind, level = 0) {
-      const o = output();
+      const o = effectsOutput();
       if (!o) return;
       try {
         SOUNDS[kind](o.c, o.out, level);
@@ -398,6 +415,10 @@ export function createSfx(createContext: () => AudioContext, muted: boolean): Sf
       }
     },
     stopBgm,
+    cutEffects() {
+      effects?.disconnect();
+      effects = null;
+    },
     setMuted(next) {
       muted = next;
       // 鳴り始めた単発音もすぐ消えるよう、出口の音量で切る

@@ -118,7 +118,7 @@ export function playRace(
       // 取る機体が、取る時刻に通る場所へ置く
       const p = progressAt(script.racers[box.racer]!, box.pickT);
       const frame = trackFrame(p);
-      const lane = laneOffset(box.racer, count);
+      const lane = rockets.laneOf(box.racer);
       return {
         pickT: box.pickT,
         position: frame.pos

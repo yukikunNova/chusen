@@ -33,7 +33,9 @@ function fakeAudio() {
       threshold: param(),
       ratio: param(),
       delayTime: param(),
-      disconnect: () => undefined,
+      disconnect: () => {
+        for (let i = links.length - 1; i >= 0; i--) if (links[i]![0] === made) links.splice(i, 1);
+      },
       start: (at?: number) => void starts.push(at ?? 0),
       stop: () => void stats.stops++,
     };
@@ -219,6 +221,35 @@ describe('createSfx', () => {
     expect(reaches(master, destination)).toBe(true);
     // 出口へは全体音量からしかつながない（ミュートで響きの残りも消える）
     expect(links.filter(([, to]) => to === destination).map(([from]) => from)).toEqual([master]);
+  });
+  it('cutEffects で予約済みの単発音が出口から切り離され、そのあとの音はまた鳴る', () => {
+    const { createContext, links, destination, reaches } = fakeAudio();
+    const sfx = createSfx(() => createContext(), false);
+    sfx.unlock();
+    let before = links.length;
+    sfx.play('fever');
+    const old = links.slice(before).map(([from]) => from);
+    expect(old.every((source) => reaches(source, destination))).toBe(true);
+    sfx.cutEffects();
+    expect(old.some((source) => reaches(source, destination))).toBe(false);
+    before = links.length;
+    sfx.play('fanfare');
+    const fresh = links.slice(before).map(([from]) => from);
+    expect(fresh.length).toBeGreaterThan(0);
+    expect(fresh.every((source) => reaches(source, destination))).toBe(true);
+  });
+  it('cutEffects は BGM を止めない。unlock 前に呼んでも何もしない', () => {
+    const { stats, createContext, links, destination, reaches } = fakeAudio();
+    const sfx = createSfx(() => createContext(), false);
+    sfx.cutEffects();
+    sfx.unlock();
+    const before = links.length;
+    sfx.startBgm();
+    const bgm = links.slice(before).map(([from]) => from);
+    const stops = stats.stops;
+    sfx.cutEffects();
+    expect(stats.stops).toBe(stops);
+    expect(bgm.every((source) => reaches(source, destination))).toBe(true);
   });
   it('コンプレッサーやディレイが無い環境でも鳴らせる', () => {
     const { stats, createContext } = fakeAudio();

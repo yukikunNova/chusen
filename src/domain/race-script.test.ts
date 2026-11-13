@@ -142,6 +142,25 @@ describe('buildRaceScript', () => {
     }
     expect(bad).toEqual([]);
   });
+  it('ごぼう抜きの前の進み方（出遅れなどの速さの差）は消さない', () => {
+    const bad: string[] = [];
+    for (const n of [4, 8, 20]) {
+      for (let seed = 1; seed <= 100; seed++) {
+        const s = build(n, seed);
+        const surge = s.events.find((e) => e.kind === 'surge')!;
+        const keys = s.racers[surge.racer]!.keys;
+        // 開始までの 2 秒刻みの節目が残っている
+        for (let t = 3; t < surge.t; t += 2) {
+          if (!keys.some((k) => k.t === t)) bad.push(`n=${n} seed=${seed}: ${t} 秒の節目がない`);
+        }
+        for (let k = 1; k < keys.length; k++) {
+          if (keys[k]!.t <= keys[k - 1]!.t) bad.push(`n=${n} seed=${seed}: 時刻が逆転`);
+          if (keys[k]!.p < keys[k - 1]!.p) bad.push(`n=${n} seed=${seed}: 後戻り`);
+        }
+      }
+    }
+    expect(bad.slice(0, 5)).toEqual([]);
+  });
   it('3 人以下ではごぼう抜きなし', () => {
     for (const n of [1, 2, 3]) {
       for (const seed of SEEDS) {

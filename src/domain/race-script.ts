@@ -206,8 +206,11 @@ function applySurge(racers: Racer[], events: readonly RaceEvent[]) {
   // 下から SURGE_PASSED 人目より少し前へ出る。最終コーナー入口の位置は超えない
   const passed = at(t1)[SURGE_PASSED - 1]!;
   const high = Math.min(corner, Math.max(low, passed + (corner - passed) * 0.15));
+  // 開始前の進み方（出遅れなどの速さの差）は、形を保ったまま開始位置につながるよう縮める
+  const original = progressAt(racer, t0);
+  const scale = original > 0 ? low / original : 0;
   racer.keys = [
-    { t: KEY_TIMES[0], p: 0 },
+    ...racer.keys.filter((k) => k.t < t0).map((k) => ({ t: k.t, p: k.p * scale })),
     { t: t0, p: low },
     { t: t1, p: high },
     ...racer.keys.filter((k) => k.t > t1).map((k) => ({ t: k.t, p: Math.max(k.p, high) })),

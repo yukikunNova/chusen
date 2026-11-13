@@ -12,6 +12,8 @@ export type Rockets = {
   setState(i: number, p: number, fx: RocketFx): void;
   /** i 番目の機体の現在位置（直前の setState の結果）。呼び出し側で書き換えないこと。 */
   positionOf(i: number): THREE.Vector3;
+  /** 機体 i が走るレーン（コース中心からのずれ）。 */
+  laneOf(i: number): { x: number; y: number };
   dispose(): void;
 };
 
@@ -246,6 +248,9 @@ export function createRockets(stage: Stage, names: readonly string[]): Rockets {
       rocket.tag.position
         .copy(rocket.body.position)
         .addScaledVector(frame.up, tagSide * (1.5 + TAG_HEIGHT * zoom * 0.62));
+    },
+    laneOf(i) {
+      return rockets[i]?.lane ?? { x: 0, y: 0 };
     },
     positionOf(i) {
       return rockets[i]?.body.position ?? origin;

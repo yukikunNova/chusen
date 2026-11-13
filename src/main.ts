@@ -113,8 +113,12 @@ const hooks: RaceHooks = {
   onEnd: (skipped) => {
     bgmWanted = false;
     sfx.stopBgm();
-    // スキップ時は 1 着ゴールを通らないので、ここで鳴らす
-    if (skipped) sfx.play('fanfare');
+    if (skipped) {
+      // 予約済みの音（フィーバーの一発など）が結果画面で鳴らないよう切る
+      sfx.cutEffects();
+      // スキップ時は 1 着ゴールを通らないので、ここで鳴らす
+      sfx.play('fanfare');
+    }
   },
   onFirstFinish: () => {
     bgmWanted = false;
