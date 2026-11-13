@@ -12,6 +12,18 @@ function setup(muted = false) {
 }
 
 describe('mountHud', () => {
+  it('写真判定の表示を出し、着差が決まったら数字を出し、null で消す', () => {
+    const { root, hud } = setup();
+    expect(one(root, 'photo').hidden).toBe(true);
+    hud.setPhoto({ gap: null });
+    expect(one(root, 'photo').hidden).toBe(false);
+    expect(one(root, 'photo').textContent).toContain('写真判定');
+    expect(one(root, 'photo').textContent).not.toContain('秒差');
+    hud.setPhoto({ gap: 0.003 });
+    expect(one(root, 'photo').textContent).toContain('0.003秒差');
+    hud.setPhoto(null);
+    expect(one(root, 'photo').hidden).toBe(true);
+  });
   it('テロップを出し、null で消す', () => {
     const { root, hud } = setup();
     expect(one(root, 'telop').hidden).toBe(true);

@@ -16,7 +16,11 @@ export function activeCue(cues: readonly Cue[], t: number): string | null {
   return current && t - current.t < CUE_DURATION ? current.text : null;
 }
 
-export type Shot = 'lineup' | 'chase' | 'overhead' | 'side' | 'finalCorner' | 'goal' | 'pullback';
+export type Shot =
+  'lineup' | 'chase' | 'overhead' | 'side' | 'finalCorner' | 'goal' | 'pullback' | 'photo';
+
+/** 写真判定のスロー区間（レース内の時刻）。1 着ゴールの前後だけ、1/5 の速さで進める。 */
+export const PHOTO_SLOW = { from: 22.8, to: 23.2, rate: 0.2 } as const;
 
 const SHOTS: readonly { from: number; shot: Shot }[] = [
   { from: 26, shot: 'pullback' },
@@ -28,8 +32,9 @@ const SHOTS: readonly { from: number; shot: Shot }[] = [
   { from: 3, shot: 'chase' },
 ];
 
-/** 時刻 t のカメラカット。 */
-export function shotAt(t: number): Shot {
+/** 時刻 t のカメラカット。photo: 写真判定の回（スロー区間はゴール線の真横から撮る）。 */
+export function shotAt(t: number, photo = false): Shot {
+  if (photo && t >= PHOTO_SLOW.from && t < PHOTO_SLOW.to) return 'photo';
   return SHOTS.find((s) => t >= s.from)?.shot ?? 'lineup';
 }
 

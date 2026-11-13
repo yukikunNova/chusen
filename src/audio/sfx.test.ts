@@ -99,6 +99,7 @@ const KINDS: SfxKind[] = [
   'box',
   'rare',
   'fever',
+  'photo',
 ];
 
 describe('createSfx', () => {

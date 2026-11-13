@@ -9,6 +9,7 @@ import {
   buildHighlights,
   buildOvertakes,
   isFever,
+  photoState,
   type Box,
 } from './hype';
 
@@ -174,5 +175,22 @@ describe('isFever', () => {
     expect(isFever(19)).toBe(true);
     expect(isFever(22.9)).toBe(true);
     expect(isFever(TIMELINE.finishStart)).toBe(false);
+  });
+});
+
+describe('photoState', () => {
+  const photo = buildRaceScript(order(5), createRand(3), 0.004);
+  const second = photo.racers[1]!.finishTime;
+  it('写真判定でない回は何も出さない', () => {
+    const plain = buildRaceScript(order(5), createRand(3));
+    for (const t of [0, 22.9, 23, 23.1, 25]) expect(photoState(plain, t)).toBeNull();
+  });
+  it('スローに入ったら「写真判定」、2 着がゴールしたら着差を出し、しばらくして消す', () => {
+    expect(photoState(photo, 22.79)).toBeNull();
+    expect(photoState(photo, 22.8)).toEqual({ gap: null });
+    expect(photoState(photo, second - 0.001)).toEqual({ gap: null });
+    expect(photoState(photo, second)).toEqual({ gap: 0.004 });
+    expect(photoState(photo, second + 1.9)).toEqual({ gap: 0.004 });
+    expect(photoState(photo, second + 2)).toBeNull();
   });
 });

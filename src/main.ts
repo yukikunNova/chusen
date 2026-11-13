@@ -3,15 +3,17 @@ import { createApp, type App, type RaceRunner } from './app';
 import { createSfx, type SfxKind } from './audio/sfx';
 import { buildCommentary } from './domain/commentary';
 import { createRand } from './domain/prng';
-import { buildRaceScript, type RaceEventKind } from './domain/race-script';
+import { buildRaceScript, drawPhotoGap, type RaceEventKind } from './domain/race-script';
 import { cryptoRandomInt } from './domain/shuffle';
 import { generateCourse } from './scene/course';
 import { createFireworks } from './scene/fireworks';
 import { idleCamera, playRace, type RaceHooks } from './scene/race-player';
 import { createSpace } from './scene/space';
 import { createStage, isWebGLAvailable, type Stage } from './scene/stage';
+import { buildSummary } from './scene/titles';
 import { createTrack } from './scene/track';
 import { mountHud, type Hud } from './ui/hud';
+import { renderShareCard } from './ui/share-card';
 import { runSimpleReveal } from './ui/simple-reveal';
 import { getBrowserStorage, loadStore } from './storage/store';
 
@@ -30,13 +32,26 @@ async function copyText(text: string): Promise<boolean> {
   }
 }
 
-function download(filename: string, text: string) {
-  const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+function saveBlob(filename: string, blob: Blob) {
+  const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
   link.download = filename;
   link.click();
   URL.revokeObjectURL(url);
+}
+
+function download(filename: string, text: string) {
+  saveBlob(filename, new Blob([text], { type: 'application/json' }));
+}
+
+async function copyImage(blob: Blob): Promise<boolean> {
+  try {
+    await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 const canvas = document.querySelector<HTMLCanvasElement>('#stage');
@@ -109,6 +124,12 @@ const hooks: RaceHooks = {
     sfx.stopBgm();
     sfx.startBgm(true);
   },
+  onPhoto: () => {
+    // 音楽を止めて、心臓の音だけにする
+    bgmWanted = false;
+    sfx.stopBgm();
+    sfx.play('photo');
+  },
   onEvent: (event) => sfx.play(EVENT_SOUND[event.kind]),
   onEnd: (skipped) => {
     bgmWanted = false;
@@ -134,23 +155,28 @@ const hooks: RaceHooks = {
 const runRace: RaceRunner = (order, onDone) => {
   // 「抽選スタート」のクリック内で呼ばれるので、ここで音を使えるようにする
   sfx.unlock();
+  // 演出用の乱数。順位は order で確定済みで、ここでは変わらない
+  const seed = Date.now();
   if (!stage) {
+    // 簡易表示でも、称号とドパ値は同じ台本から決める
+    const summary = buildSummary(buildRaceScript(order, createRand(seed)), null);
     return runSimpleReveal(
       root,
       order.map((m) => m.name),
       () => {
         sfx.play('fanfare');
-        onDone();
+        onDone(summary);
       },
     );
   }
-  // 演出用の乱数。順位は order で確定済みで、ここでは変わらない
-  const seed = Date.now();
-  const script = buildRaceScript(order, createRand(seed));
+  // 写真判定の抽選は別の乱数で引く（台本の乱数の並びを変えない）
+  const script = buildRaceScript(order, createRand(seed), drawPhotoGap(createRand(seed + 4)));
   const cues = buildCommentary(script, createRand(seed + 1));
   // コースも毎回作り直す（見た目だけで、順位には関係しない）
+  const course = generateCourse(createRand(seed + 3));
   track?.dispose();
-  track = createTrack(stage, generateCourse(createRand(seed + 3)));
+  track = createTrack(stage, course);
+  const summary = buildSummary(script, course.name);
   const raceHud = mountHud(
     root,
     { onSkip: () => app?.skip(), onToggleMute: () => app?.setMuted(!muted) },
@@ -160,7 +186,7 @@ const runRace: RaceRunner = (order, onDone) => {
   return playRace(stage, script, cues, raceHud, hooks, () => {
     raceHud.destroy();
     if (hud === raceHud) hud = null;
-    onDone();
+    onDone(summary);
   });
 };
 
@@ -174,6 +200,17 @@ app = createApp({
   copyText,
   download,
   confirm: (message) => window.confirm(message),
+  share: {
+    renderCard: renderShareCard,
+    saveImage: (blob, filename) => saveBlob(filename, blob),
+    copyImage,
+    openPost: (url) => {
+      // noopener を付けると開けたかどうかが分からないので、開いたあとで親への参照を切る
+      const opened = window.open(url, '_blank');
+      if (opened) opened.opener = null;
+      return opened !== null;
+    },
+  },
   extraNotice: stage ? null : '3D表示が使えないため簡易表示で動作します',
   onScreenChange: (screen) => {
     if (screen === 'result') {

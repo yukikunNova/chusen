@@ -26,6 +26,8 @@ export type Hud = {
   popScore(x: number, y: number, text: string): void;
   setRoulette(state: RouletteState | null): void;
   setFever(on: boolean): void;
+  /** 写真判定の表示。gap が null のあいだは判定中、数字が入ったら着差（秒）。null で消す。 */
+  setPhoto(state: { gap: number | null } | null): void;
   /** 画面全体を一瞬光らせる。続けて呼んでも、間隔が短いぶんは光らせない。 */
   flash(): void;
   setMuted(muted: boolean): void;
@@ -47,11 +49,12 @@ export function mountHud(root: HTMLElement, handlers: HudHandlers, muted: boolea
   const combo = el('div', { class: 'hud-combo', testid: 'combo', hidden: true });
   const score = el('div', { class: 'hud-score', testid: 'score', hidden: true });
   const roulette = el('div', { class: 'hud-roulette', testid: 'roulette', hidden: true });
+  const photo = el('div', { class: 'hud-photo', testid: 'photo', hidden: true });
   const flash = el('div', { class: 'hud-flash', testid: 'flash' });
   const lines = el('div', { class: 'hud-lines' });
   const pops = el('div', { class: 'hud-pops' });
   // 途中経過の飾り。読み上げの対象にしない
-  for (const item of [banner, combo, score, roulette, flash, lines, pops]) {
+  for (const item of [banner, combo, score, roulette, photo, flash, lines, pops]) {
     item.setAttribute('aria-hidden', 'true');
   }
   const ranking = el('ol', { class: 'hud-ranking', testid: 'ranking' });
@@ -72,6 +75,7 @@ export function mountHud(root: HTMLElement, handlers: HudHandlers, muted: boolea
     combo,
     roulette,
     banner,
+    photo,
     countdown,
     courseName,
     ranking,
@@ -90,6 +94,7 @@ export function mountHud(root: HTMLElement, handlers: HudHandlers, muted: boolea
   let lastCombo = 0;
   let lastScore = -1;
   let lastRoulette = '';
+  let lastPhoto = '';
   let lastFlash = -Infinity;
   const timers = new Set<ReturnType<typeof setTimeout>>();
   /** アニメーションを最初からやり直す。 */
@@ -225,6 +230,21 @@ export function mountHud(root: HTMLElement, handlers: HudHandlers, muted: boolea
     },
     setFever(on) {
       container.classList.toggle('fever', on);
+    },
+    setPhoto(state) {
+      const key = state ? `on|${state.gap ?? ''}` : '';
+      if (key === lastPhoto) return;
+      lastPhoto = key;
+      photo.hidden = state === null;
+      if (!state) return;
+      photo.dataset.state = state.gap === null ? 'judging' : 'result';
+      photo.replaceChildren(
+        el('span', { class: 'hud-photo-label', text: '📸 写真判定' }),
+        ...(state.gap === null
+          ? []
+          : [el('span', { class: 'hud-photo-gap', text: `${state.gap.toFixed(3)}秒差!!` })]),
+      );
+      replay(photo, 'pop');
     },
     flash() {
       const now = performance.now();

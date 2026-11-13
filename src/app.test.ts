@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createApp, type AppDeps, type RaceRunner } from './app';
+import type { ShareModel } from './domain/share';
+import type { RaceSummary } from './domain/summary';
 import { addMembers, createInitialStore, setMemberActive, type Store } from './domain/roster';
 import { shuffle } from './domain/shuffle';
 import { STORAGE_KEY, exportStore, type LoadNotice, type StorageLike } from './storage/store';
@@ -26,7 +28,18 @@ function setup(
     getItem: (k) => map.get(k) ?? null,
     setItem: (k, v) => void map.set(k, v),
   };
-  const dones: Array<() => void> = [];
+  const dones: Array<(summary?: RaceSummary) => void> = [];
+  /** 画像にした中身の記録。 */
+  const cards: ShareModel[] = [];
+  const share = {
+    renderCard: vi.fn(async (model: ShareModel) => {
+      cards.push(model);
+      return { blob: new Blob([`card${cards.length}`]), dataUrl: `data:card${cards.length}` };
+    }),
+    saveImage: vi.fn((_blob: Blob, _filename: string) => undefined),
+    copyImage: vi.fn(async (_blob: Blob) => true),
+    openPost: vi.fn((_url: string) => true),
+  };
   const raceSkip = vi.fn();
   const runRace = vi.fn<RaceRunner>((_order, onDone) => {
     dones.push(onDone);
@@ -45,11 +58,23 @@ function setup(
     extraNotice: null,
     onScreenChange: vi.fn(),
     onMutedChange: vi.fn(),
+    share,
     ...over,
   };
   const app = createApp(deps);
   const saved = () => JSON.parse(map.get(STORAGE_KEY)!) as Store;
-  return { root, app, deps, dones, raceSkip, runRace: deps.runRace as typeof runRace, saved, map };
+  return {
+    root,
+    app,
+    deps,
+    dones,
+    raceSkip,
+    runRace: deps.runRace as typeof runRace,
+    saved,
+    map,
+    cards,
+    share,
+  };
 }
 
 const all = (root: HTMLElement, id: string) =>
@@ -248,5 +273,137 @@ describe('createApp', () => {
     expect(one(root, 'message').textContent).toContain('読み込めないファイルです');
     expect(map.get(STORAGE_KEY)).toBe(before);
     expect(all(root, 'member-row')).toHaveLength(1);
+  });
+});
+
+describe('結果の共有', () => {
+  const summary: RaceSummary = {
+    courseName: 'ネオン峠',
+    score: 5000,
+    titles: ['ドパ値MVP', '大トリ'],
+    photoGap: 0.003,
+  };
+  const preview = (root: HTMLElement) => one(root, 'card-preview') as HTMLImageElement;
+  async function toResult(over: Parameters<typeof setup>[1] = {}) {
+    const ctx = setup(storeWith(['a', 'b']), over);
+    ctx.app.start();
+    ctx.dones[0]!(summary);
+    await vi.waitFor(() => expect(preview(ctx.root).hidden).toBe(false));
+    return ctx;
+  }
+
+  it('結果画面に称号とレースのまとめを出し、実名の画像を作る', async () => {
+    const { root, cards } = await toResult();
+    expect(all(root, 'title-badge').map((b) => b.textContent)).toEqual(['ドパ値MVP', '大トリ']);
+    expect(one(root, 'result-info').textContent).toContain('ネオン峠');
+    expect(cards).toHaveLength(1);
+    expect(cards[0]!.rows.map((r) => r.name)).toEqual(['b', 'a']);
+    expect(cards[0]!.rows.map((r) => r.title)).toEqual(['ドパ値MVP', '大トリ']);
+    expect(cards[0]!.photoGap).toBe(0.003);
+    expect(preview(root).getAttribute('src')).toBe('data:card1');
+  });
+  it('レースのまとめが無くても結果画面と画像は出る', async () => {
+    const { root, app, dones, cards } = setup(storeWith(['a', 'b']));
+    app.start();
+    dones[0]!();
+    await vi.waitFor(() => expect(preview(root).hidden).toBe(false));
+    expect(cards[0]!.rows.map((r) => r.name)).toEqual(['b', 'a']);
+    expect(one(root, 'result-info').hidden).toBe(true);
+  });
+  it('名前を伏せると画像を作り直し、保存する画像にも投稿文にも実名が出ない', async () => {
+    const { root, cards, share } = await toResult();
+    one(root, 'hide-names').click();
+    await vi.waitFor(() => expect(preview(root).getAttribute('src')).toBe('data:card2'));
+    expect(cards[1]!.rows.map((r) => r.name)).toEqual(['Aさん', 'Bさん']);
+    one(root, 'save-image').click();
+    const [blob, filename] = share.saveImage.mock.calls[0]!;
+    expect(await (blob as Blob).text()).toBe('card2');
+    expect(filename).toBe('dopachu-result.png');
+    one(root, 'post').click();
+    await vi.waitFor(() => expect(share.openPost).toHaveBeenCalledTimes(1));
+    const text = new URL(share.openPost.mock.calls[0]![0] as string).searchParams.get('text')!;
+    expect(text).toContain('🥇 Aさん');
+    expect(text).not.toMatch(/🥇 b|🥈 a/);
+  });
+  it('切り替えた直後の古い画像は使わない（作り直しが終わるまでボタンを止める）', async () => {
+    const { root, share } = await toResult();
+    one(root, 'hide-names').click();
+    expect((one(root, 'save-image') as HTMLButtonElement).disabled).toBe(true);
+    one(root, 'save-image').click();
+    expect(share.saveImage).not.toHaveBeenCalled();
+  });
+  it('画像をコピーし、結果を案内する', async () => {
+    const { root, share } = await toResult();
+    one(root, 'copy-image').click();
+    await vi.waitFor(() => expect(one(root, 'share-note').textContent).toContain('コピーしました'));
+    expect(await (share.copyImage.mock.calls[0]![0] as Blob).text()).toBe('card1');
+  });
+  it('画像をコピーできなければ、保存して添付するよう案内する', async () => {
+    const { root, share } = await toResult();
+    share.copyImage.mockResolvedValue(false);
+    one(root, 'copy-image').click();
+    await vi.waitFor(() => expect(one(root, 'share-note').textContent).toContain('画像を保存'));
+  });
+  it('X に投稿: 画像をコピーしてから投稿画面を開き、貼り付けを案内する', async () => {
+    const { root, share } = await toResult();
+    one(root, 'post').click();
+    await vi.waitFor(() => expect(share.openPost).toHaveBeenCalledTimes(1));
+    expect(share.copyImage).toHaveBeenCalledTimes(1);
+    const url = new URL(share.openPost.mock.calls[0]![0] as string);
+    expect(url.origin).toBe('https://x.com');
+    expect(url.searchParams.get('text')).toContain('🥇 b（ドパ値MVP）');
+    expect(url.searchParams.get('text')).toContain('#ドパ抽');
+    await vi.waitFor(() => expect(one(root, 'share-note').textContent).toContain('貼り付け'));
+  });
+  it('X に投稿: 画像をコピーできなくても投稿画面は開き、保存して添付するよう案内する', async () => {
+    const { root, share } = await toResult();
+    share.copyImage.mockResolvedValue(false);
+    one(root, 'post').click();
+    await vi.waitFor(() => expect(share.openPost).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(one(root, 'share-note').textContent).toContain('画像を保存'));
+  });
+  it('X に投稿: 投稿画面を開けなかった（ポップアップがブロックされた）ら、そう案内する', async () => {
+    const { root, share } = await toResult();
+    share.openPost.mockReturnValue(false);
+    one(root, 'post').click();
+    await vi.waitFor(() => expect(one(root, 'share-note').textContent).toContain('ポップアップ'));
+    expect(one(root, 'share-note').textContent).not.toContain('貼り付け');
+  });
+  it('画像を作れない環境では、見本を出さずボタンも止めたまま案内する', async () => {
+    const { root, app, dones } = setup(storeWith(['a', 'b']), {
+      share: {
+        renderCard: async () => null,
+        saveImage: vi.fn(),
+        copyImage: vi.fn(async () => false),
+        openPost: vi.fn(() => true),
+      },
+    });
+    app.start();
+    dones[0]!(summary);
+    await vi.waitFor(() =>
+      expect(one(root, 'share-note').textContent).toContain('画像を作れませんでした'),
+    );
+    expect(preview(root).hidden).toBe(true);
+    expect((one(root, 'save-image') as HTMLButtonElement).disabled).toBe(true);
+  });
+  it('もう一度抽選したあと、前の結果の画像が遅れてできても使わない', async () => {
+    let release: (() => void) | null = null;
+    const { root, app, dones, share } = setup(storeWith(['a', 'b']));
+    share.renderCard.mockImplementationOnce(
+      (model: ShareModel) =>
+        new Promise((resolve) => {
+          void model;
+          release = () => resolve({ blob: new Blob(['old']), dataUrl: 'data:old' });
+        }),
+    );
+    app.start();
+    dones[0]!(summary);
+    app.redraw();
+    dones[1]!(summary);
+    await vi.waitFor(() => expect(preview(root).hidden).toBe(false));
+    release!();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(preview(root).getAttribute('src')).not.toBe('data:old');
   });
 });

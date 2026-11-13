@@ -10,6 +10,7 @@ import {
 import type { Hud } from '../ui/hud';
 import { createAttacks } from './attacks';
 import {
+  PHOTO_SLOW,
   activeCue,
   attackFlight,
   eventFx,
@@ -25,12 +26,13 @@ import {
   buildBoxes,
   buildHighlights,
   isFever,
+  photoState,
   type Box,
   type Highlight,
 } from './hype';
 import { createItemBoxes } from './item-boxes';
 import { laneOffset } from './layout';
-import { createRaceClock } from './race-clock';
+import { createRaceClock, createTimeWarp } from './race-clock';
 import { createRockets } from './rockets';
 import type { Stage } from './stage';
 import { currentCourse, trackFrame, type TrackFrame } from './track';
@@ -46,6 +48,8 @@ export type RaceHooks = {
   onBox?(phase: 'pick' | 'reveal', box: Box): void;
   /** フィーバータイムに入った瞬間。 */
   onFever?(): void;
+  /** 写真判定のスローに入った。 */
+  onPhoto?(): void;
   /** 1 着がゴール線を越えた瞬間。スキップ時は呼ばれない。 */
   onFirstFinish?(): void;
   /** onDone の直前。 */
@@ -134,7 +138,10 @@ export function playRace(
     const inside = projected.z < 1 && Math.abs(projected.x) < 0.9 && Math.abs(projected.y) < 0.9;
     return inside ? { x: (projected.x + 1) / 2, y: (1 - projected.y) / 2 } : { x: 0.5, y: 0.45 };
   }
-  const clock = createRaceClock(() => performance.now(), TIMELINE.duration);
+  // 写真判定の回は、ゴール前後だけ時間をゆっくり進める（視差軽減の設定ではスローにしない）
+  const photoShot = script.photo !== undefined && !stage.reducedMotion;
+  const warp = createTimeWarp(TIMELINE.duration, photoShot ? PHOTO_SLOW : null);
+  const clock = createRaceClock(() => performance.now(), warp.realDuration);
   const lineupHalfWidth =
     Math.max(...script.racers.map((_, i) => Math.abs(laneOffset(i, count).x))) + 5;
 
@@ -192,6 +199,8 @@ export function playRace(
         hooks.onBox?.('reveal', box);
       }
     }
+    // スローにしない回（視差軽減）は、音楽を止める合図も出さない
+    if (photoShot && hookDue(prevT, t, PHOTO_SLOW.from)) hooks.onPhoto?.();
     if (hookDue(prevT, t, FEVER_FROM)) {
       hud.showBanner('FEVER TIME!!', 'fever');
       hud.flash();
@@ -246,7 +255,7 @@ export function playRace(
 
   function placeCamera(t: number, dt: number, avg: number, lead: number) {
     const camera = stage.camera;
-    const shot = shotAt(t);
+    const shot = shotAt(t, photoShot);
     const cut = shot !== lastShot;
     lastShot = shot;
     // カットが変わった瞬間は追従の遅れを捨てて切り替える
@@ -321,6 +330,19 @@ export function playRace(
         fov = 52;
         break;
       }
+      case 'photo': {
+        // 写真判定: ゴール線の横から望遠で撮る（前後の差が左右の差に見える）。
+        // 真横だとゲートの輪が線に重なるので、少し手前から斜めに狙う
+        const line = trackFrame(1);
+        camera.position
+          .copy(line.pos)
+          .addScaledVector(line.right, 44)
+          .addScaledVector(line.tangent, -16)
+          .addScaledVector(line.up, 6);
+        lookTarget.copy(line.pos).addScaledVector(line.up, 1.5);
+        fov = 30;
+        break;
+      }
       case 'pullback': {
         // 引き: ゲートから空へ（花火へつなぐ）
         const k = Math.min(1, t - 26);
@@ -335,7 +357,7 @@ export function playRace(
       }
     }
 
-    if (isFever(t) && !stage.reducedMotion) {
+    if (isFever(t) && !stage.reducedMotion && shot !== 'photo') {
       fov += FEVER_FOV;
       shake = Math.max(shake, FEVER_SHAKE);
     }
@@ -350,7 +372,7 @@ export function playRace(
 
     // イベント発生時の画面揺れ
     shake = Math.max(0, shake - dt * 3);
-    if (shake > 0 && !stage.reducedMotion) {
+    if (shake > 0 && !stage.reducedMotion && shot !== 'photo') {
       camera.position.x += (Math.random() - 0.5) * shake;
       camera.position.y += (Math.random() - 0.5) * shake;
     }
@@ -366,7 +388,8 @@ export function playRace(
     hud.setRoulette(
       !box ? null : t < box.revealT ? { name } : { name, label: box.label, rarity: box.rarity },
     );
-    hud.setFever(isFever(t));
+    hud.setFever(isFever(t) && !warp.slowAt(t));
+    hud.setPhoto(photoState(script, t));
     itemBoxes.update(t);
   }
 
@@ -385,7 +408,7 @@ export function playRace(
   }
 
   const stop = stage.onFrame((dt) => {
-    const t = clock.elapsed();
+    const t = clock.finished() ? TIMELINE.duration : warp.toRace(clock.elapsed());
     fireHooks(t);
     hud.setCountdown(countdownText(t));
     hud.setCourseName(t < TIMELINE.countdownEnd ? currentCourse().name : null);

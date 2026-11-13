@@ -14,7 +14,8 @@ export type SfxKind =
   | 'combo'
   | 'box'
   | 'rare'
-  | 'fever';
+  | 'fever'
+  | 'photo';
 export type Sfx = {
   /** ユーザー操作のハンドラ内で呼ぶ（AudioContext の生成・resume）。 */
   unlock(): void;
@@ -286,6 +287,13 @@ export function createSfx(createContext: () => AudioContext, muted: boolean): Sf
       ]);
       sparkle(c, out, 2093, 12, 0.27);
       boom(c, out, 0.27, 0.6);
+    },
+    photo: (c, out) => {
+      // 時間が遅くなる音 → 心臓の音
+      fat(c, out, { freq: 880, to: 110, dur: 0.7, type: 'sawtooth', vol: 0.2 });
+      for (const at of [0.5, 0.75, 1.3, 1.55]) {
+        tone(c, out, { freq: 70, to: 40, at, dur: 0.18, type: 'sine', vol: 0.6 });
+      }
     },
     fever: (c, out) => {
       // せり上がり → 一発

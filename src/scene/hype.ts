@@ -7,7 +7,7 @@ import {
   type RaceEventKind,
   type RaceScript,
 } from '../domain/race-script';
-import { ATTACK_FLIGHT } from './direction';
+import { ATTACK_FLIGHT, PHOTO_SLOW } from './direction';
 
 /**
  * 盛り上げ演出の時間割（追い抜きの告知・アイテム箱・コンボと点数・フィーバー）。
@@ -195,4 +195,17 @@ export function buildHighlights(script: RaceScript): Highlight[] {
     total += points;
     return { ...item, combo, points, total };
   });
+}
+
+/** 着差を出しておく秒数（レース内の時刻）。 */
+const PHOTO_LINGER = 2;
+
+/**
+ * 写真判定の表示。スローに入ったら「写真判定」、2 着がゴールしたら着差（gap）を出す。出さないときは null。
+ */
+export function photoState(script: RaceScript, t: number): { gap: number | null } | null {
+  const second = script.racers[1];
+  if (!script.photo || !second || t < PHOTO_SLOW.from) return null;
+  if (t < second.finishTime) return { gap: null };
+  return t < second.finishTime + PHOTO_LINGER ? { gap: script.photo.gap } : null;
 }
