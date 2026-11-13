@@ -50,6 +50,8 @@ export type RaceHooks = {
   onFever?(): void;
   /** 写真判定のスローに入った。 */
   onPhoto?(): void;
+  /** 毎フレーム、レース内の時刻を知らせる（リプレイ動画の録画用）。 */
+  onTick?(t: number): void;
   /** 1 着がゴール線を越えた瞬間。スキップ時は呼ばれない。 */
   onFirstFinish?(): void;
   /** onDone の直前。 */
@@ -421,6 +423,7 @@ export function playRace(
     const { avg, lead } = placeRockets(t);
     placeAttacks(t, dt);
     placeCamera(t, dt, avg, lead);
+    hooks.onTick?.(t);
     prevT = t;
     if (clock.finished()) finish(false);
   });

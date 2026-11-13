@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createApp, type AppDeps, type RaceRunner } from './app';
 import type { ShareModel } from './domain/share';
 import type { RaceSummary } from './domain/summary';
+import type { ReplayVideo } from './media/replay-recorder';
 import { addMembers, createInitialStore, setMemberActive, type Store } from './domain/roster';
 import { shuffle } from './domain/shuffle';
 import { STORAGE_KEY, exportStore, type LoadNotice, type StorageLike } from './storage/store';
@@ -28,7 +29,7 @@ function setup(
     getItem: (k) => map.get(k) ?? null,
     setItem: (k, v) => void map.set(k, v),
   };
-  const dones: Array<(summary?: RaceSummary) => void> = [];
+  const dones: Array<(summary?: RaceSummary, replay?: Promise<ReplayVideo | null>) => void> = [];
   /** 画像にした中身の記録。 */
   const cards: ShareModel[] = [];
   const share = {
@@ -36,7 +37,7 @@ function setup(
       cards.push(model);
       return { blob: new Blob([`card${cards.length}`]), dataUrl: `data:card${cards.length}` };
     }),
-    saveImage: vi.fn((_blob: Blob, _filename: string) => undefined),
+    saveFile: vi.fn((_blob: Blob, _filename: string) => undefined),
     copyImage: vi.fn(async (_blob: Blob) => true),
     openPost: vi.fn((_url: string) => true),
   };
@@ -316,7 +317,7 @@ describe('結果の共有', () => {
     await vi.waitFor(() => expect(preview(root).getAttribute('src')).toBe('data:card2'));
     expect(cards[1]!.rows.map((r) => r.name)).toEqual(['Aさん', 'Bさん']);
     one(root, 'save-image').click();
-    const [blob, filename] = share.saveImage.mock.calls[0]!;
+    const [blob, filename] = share.saveFile.mock.calls[0]!;
     expect(await (blob as Blob).text()).toBe('card2');
     expect(filename).toBe('dopachu-result.png');
     one(root, 'post').click();
@@ -330,7 +331,7 @@ describe('結果の共有', () => {
     one(root, 'hide-names').click();
     expect((one(root, 'save-image') as HTMLButtonElement).disabled).toBe(true);
     one(root, 'save-image').click();
-    expect(share.saveImage).not.toHaveBeenCalled();
+    expect(share.saveFile).not.toHaveBeenCalled();
   });
   it('画像をコピーし、結果を案内する', async () => {
     const { root, share } = await toResult();
@@ -373,7 +374,7 @@ describe('結果の共有', () => {
     const { root, app, dones } = setup(storeWith(['a', 'b']), {
       share: {
         renderCard: async () => null,
-        saveImage: vi.fn(),
+        saveFile: vi.fn(),
         copyImage: vi.fn(async () => false),
         openPost: vi.fn(() => true),
       },
@@ -405,5 +406,84 @@ describe('結果の共有', () => {
     await Promise.resolve();
     await Promise.resolve();
     expect(preview(root).getAttribute('src')).not.toBe('data:old');
+  });
+});
+
+describe('createApp: リプレイ動画', () => {
+  const video = (format: 'mp4' | 'webm' = 'mp4'): ReplayVideo => ({
+    blob: new Blob(['movie']),
+    format,
+  });
+  const button = (root: HTMLElement) => one(root, 'save-video') as HTMLButtonElement;
+  const note = (root: HTMLElement) => one(root, 'video-note').textContent;
+  function toResult(replay?: Promise<ReplayVideo | null>) {
+    const ctx = setup(storeWith(['a', 'b']));
+    ctx.app.start();
+    ctx.dones[0]!(undefined, replay);
+    return ctx;
+  }
+
+  it('動画が無い回は保存ボタンを出さない', async () => {
+    const { root } = toResult();
+    expect(button(root).hidden).toBe(true);
+    const none = toResult(Promise.resolve(null));
+    await vi.waitFor(() => expect(button(none.root).hidden).toBe(true));
+  });
+  it('準備中は押せず、できたら MP4 で保存でき、添付の案内を出す', async () => {
+    let finish: (v: ReplayVideo | null) => void = () => undefined;
+    const { root, share } = toResult(new Promise((resolve) => (finish = resolve)));
+    expect(button(root).hidden).toBe(false);
+    expect(button(root).disabled).toBe(true);
+    finish(video());
+    await vi.waitFor(() => expect(button(root).disabled).toBe(false));
+    expect(note(root)).toBe('');
+    button(root).click();
+    const [blob, filename] = share.saveFile.mock.calls[0]!;
+    expect(await (blob as Blob).text()).toBe('movie');
+    expect(filename).toBe('dopachu-replay.mp4');
+    expect(note(root)).toContain('添付');
+  });
+  it('WebM でしか録れない環境では、X に投稿できない形式だと知らせる', async () => {
+    const { root, share } = toResult(Promise.resolve(video('webm')));
+    await vi.waitFor(() => expect(button(root).disabled).toBe(false));
+    expect(note(root)).toContain('WebM');
+    button(root).click();
+    expect(share.saveFile.mock.calls[0]![1]).toBe('dopachu-replay.webm');
+    expect(note(root)).toContain('WebM');
+  });
+  it('名前を伏せている間は保存できない（動画には名札が映る）。戻せば保存できる', async () => {
+    const { root, share } = toResult(Promise.resolve(video()));
+    await vi.waitFor(() => expect(button(root).disabled).toBe(false));
+    one(root, 'hide-names').click();
+    expect(button(root).disabled).toBe(true);
+    expect(note(root)).toContain('名前を伏せている');
+    button(root).click();
+    expect(share.saveFile).not.toHaveBeenCalled();
+    one(root, 'hide-names').click();
+    expect(button(root).disabled).toBe(false);
+    expect(note(root)).toBe('');
+  });
+  it('名前を伏せたあとで動画ができても、保存できないまま', async () => {
+    let finish: (v: ReplayVideo | null) => void = () => undefined;
+    const { root } = toResult(new Promise((resolve) => (finish = resolve)));
+    one(root, 'hide-names').click();
+    finish(video());
+    await vi.waitFor(() => expect(note(root)).toContain('名前を伏せている'));
+    expect(button(root).disabled).toBe(true);
+  });
+  it('動画の準備に失敗しても結果画面は使える', async () => {
+    const { root } = toResult(Promise.reject(new Error('x')));
+    await vi.waitFor(() => expect(button(root).hidden).toBe(true));
+    expect(resultNames(root)).toEqual(['b', 'a']);
+  });
+  it('結果画面を離れたあとに動画ができても、次の結果画面には出さない', async () => {
+    let finish: (v: ReplayVideo | null) => void = () => undefined;
+    const { root, app, dones } = toResult(new Promise((resolve) => (finish = resolve)));
+    app.redraw();
+    dones[1]!();
+    finish(video());
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(button(root).hidden).toBe(true);
   });
 });
