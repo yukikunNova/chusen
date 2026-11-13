@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createRand } from './prng';
-import { TIMELINE, buildRaceScript, progressAt, rankingAt } from './race-script';
+import { TIMELINE, buildRaceScript, drawPhotoGap, progressAt, rankingAt } from './race-script';
 
 const COUNTS = [2, 3, 5, 15, 20];
 const SEEDS = Array.from({ length: 40 }, (_, i) => i + 1);
@@ -222,5 +222,60 @@ describe('buildRaceScript', () => {
     expect(s.racers).toHaveLength(1);
     expect(s.racers[0]!.finishTime).toBe(23);
     expect(progressAt(s.racers[0]!, 23)).toBe(1);
+  });
+});
+
+describe('写真判定', () => {
+  it('指定がなければ写真判定なし', () => {
+    expect(build(5, 1).photo).toBeUndefined();
+  });
+  it('1 人だけなら指定しても写真判定なし', () => {
+    expect(buildRaceScript(order(1), createRand(1), 0.003).photo).toBeUndefined();
+  });
+  it('2 着が 1 着の直後（0.06 秒以内）にゴールし、表示用の差を持つ', () => {
+    const s = buildRaceScript(order(5), createRand(1), 0.003);
+    expect(s.photo).toEqual({ gap: 0.003 });
+    const diff = s.racers[1]!.finishTime - s.racers[0]!.finishTime;
+    expect(diff).toBeGreaterThan(0);
+    expect(diff).toBeLessThanOrEqual(0.06);
+  });
+  it('写真判定でもゴール時刻は狭義単調増加で、ほかの機体の時刻と進み方は変わらない', () => {
+    const bad: string[] = [];
+    for (const n of [2, 3, 5, 15, 20, 60]) {
+      for (const seed of SEEDS) {
+        const plain = buildRaceScript(order(n), createRand(seed));
+        const photo = buildRaceScript(order(n), createRand(seed), 0.005);
+        photo.racers.forEach((r, i) => {
+          if (i > 0 && r.finishTime <= photo.racers[i - 1]!.finishTime)
+            bad.push(`n=${n} seed=${seed}: ${i} 着の時刻が前と逆転`);
+          if (i !== 1 && r.finishTime !== plain.racers[i]!.finishTime)
+            bad.push(`n=${n} seed=${seed}: ${i} 着の時刻が変わった`);
+          if (i !== 1 && JSON.stringify(r.keys) !== JSON.stringify(plain.racers[i]!.keys))
+            bad.push(`n=${n} seed=${seed}: ${i} 着の進み方が変わった`);
+          for (let k = 1; k < r.keys.length; k++) {
+            if (r.keys[k]!.t <= r.keys[k - 1]!.t) bad.push(`n=${n} seed=${seed}: 節目の時刻が逆転`);
+            if (r.keys[k]!.p < r.keys[k - 1]!.p) bad.push(`n=${n} seed=${seed}: 後戻り`);
+          }
+        });
+        if (JSON.stringify(photo.events) !== JSON.stringify(plain.events))
+          bad.push(`n=${n} seed=${seed}: イベントが変わった`);
+      }
+    }
+    expect(bad.slice(0, 5)).toEqual([]);
+  });
+});
+
+describe('drawPhotoGap', () => {
+  it('約 3 回に 1 回、0.001〜0.009 秒の差を返す', () => {
+    const rand = createRand(7);
+    const gaps = Array.from({ length: 3000 }, () => drawPhotoGap(rand));
+    const hits = gaps.filter((g): g is number => g !== undefined);
+    expect(hits.length).toBeGreaterThan(850);
+    expect(hits.length).toBeLessThan(1150);
+    for (const g of hits) {
+      expect(g).toBeGreaterThanOrEqual(0.001);
+      expect(g).toBeLessThanOrEqual(0.009);
+      expect(Math.abs(g * 1000 - Math.round(g * 1000))).toBeLessThan(1e-9);
+    }
   });
 });

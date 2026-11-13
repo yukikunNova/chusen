@@ -37,8 +37,10 @@ export type RaceEvent = {
 /** p: 0 = スタート線、1 = ゴール線。 */
 export type Key = { t: number; p: number };
 export type Racer = { id: string; name: string; finishTime: number; keys: Key[] };
-/** racers は最終順位順。 */
-export type RaceScript = { racers: Racer[]; events: RaceEvent[] };
+/** 写真判定。gap は画面に出す着差（秒）で、飾りの数字。 */
+export type PhotoFinish = { gap: number };
+/** racers は最終順位順。photo は写真判定の回だけ付く。 */
+export type RaceScript = { racers: Racer[]; events: RaceEvent[]; photo?: PhotoFinish };
 
 const OPENING_TIME = 3.3;
 const MID_START = 5.1;
@@ -47,6 +49,9 @@ const MID_GAP = 1.8;
 const COMEBACK_TIME = 20;
 const COMEBACK_KEY_TIME = 21;
 const MAX_FINISH_GAP = 0.6;
+/** 写真判定の回の、1 着と 2 着のゴール時刻の差（秒）。 */
+const PHOTO_TIME_GAP = 0.05;
+const PHOTO_CHANCE = 1 / 3;
 /** 進行度の節目。細かく刻むほど、区間ごとの速さの差で順位が入れ替わる。 */
 const KEY_TIMES = [3, 5, 7, 9, 11, 13, 15, 17, 19] as const;
 /** 終盤にもう一度順位を揺らす節目。 */
@@ -139,18 +144,31 @@ function buildEvents(n: number, rand: Rand): RaceEvent[] {
   return events;
 }
 
+/** 写真判定にするかを抽選する。する回は、画面に出す着差（0.001〜0.009 秒）を返す。 */
+export function drawPhotoGap(rand: Rand): number | undefined {
+  if (rand() >= PHOTO_CHANCE) return undefined;
+  return (1 + Math.floor(rand() * 9)) / 1000;
+}
+
+/**
+ * photoGap を渡すと写真判定の回になり、2 着が 1 着の直後にゴールする（2 人以上のとき）。
+ * 順位と、ほかの機体の進み方は変わらない。
+ */
 export function buildRaceScript(
   order: readonly { id: string; name: string }[],
   rand: Rand,
+  photoGap?: number,
 ): RaceScript {
   const n = order.length;
   const gap =
     n > 1 ? Math.min(MAX_FINISH_GAP, (TIMELINE.finishEnd - TIMELINE.finishStart) / (n - 1)) : 0;
+  const photo = photoGap !== undefined && n > 1;
   const ranks = cornerRanks(n, rand);
   const events = buildEvents(n, rand);
 
   const racers = order.map(({ id, name }, i): Racer => {
-    const finishTime = TIMELINE.finishStart + gap * i;
+    const finishTime =
+      TIMELINE.finishStart + (photo && i === 1 ? Math.min(PHOTO_TIME_GAP, gap / 2) : gap * i);
     const p19 = n > 1 ? 0.8 - (0.1 * ranks[i]!) / (n - 1) : 0.8;
 
     // 区間ごとの進み具合。イベントのある区間は速く／遅くする
@@ -186,7 +204,7 @@ export function buildRaceScript(
   });
 
   applySurge(racers, events);
-  return { racers, events };
+  return photo ? { racers, events, photo: { gap: photoGap } } : { racers, events };
 }
 
 /**
