@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   SHARE_MAX_ROWS,
+  SHARE_TAG,
   SHARE_URL,
   buildShareModel,
   hiddenNames,
@@ -101,6 +102,47 @@ describe('shareText', () => {
       23,
     );
     expect(weight).toBeLessThanOrEqual(280);
+  });
+});
+
+describe('投稿文の長さ（激レア回・写真判定つき）', () => {
+  // 全角は 2、半角は 1、URL は 23 として数える
+  const weight = (text: string) =>
+    [...text.replace(SHARE_URL, '')].reduce(
+      (sum, ch) => sum + (ch.charCodeAt(0) > 0x7f ? 2 : 1),
+      23,
+    );
+  const long = Array.from({ length: 5 }, (_, i) => `とても長い名前の参加者さん${i}`.repeat(3));
+
+  it('激レア回と写真判定が重なっても上限に収まり、激レアの行・タグ・URL は残す', () => {
+    for (const rare of ['gold', 'meteor', 'fever'] as const) {
+      const text = shareText(
+        buildShareModel(
+          long,
+          summary(5, {
+            rare,
+            photoGap: 0.001,
+            score: 1234567,
+            courseName: 'オーロラきりもみサーキット',
+          }),
+          false,
+        ),
+      );
+      expect(weight(text)).toBeLessThanOrEqual(280);
+      expect(text).toContain('激レア回');
+      expect(text).toContain('🥇');
+      expect(text).toContain(SHARE_TAG);
+      expect(text).toContain(SHARE_URL);
+    }
+  });
+  it('収まるときは何も削らない', () => {
+    const text = shareText(
+      buildShareModel(['あ', 'い', 'う'], summary(3, { rare: 'gold', photoGap: 0.001 }), false),
+    );
+    expect(text).toContain('コース: ネオン峠');
+    expect(text).toContain('ドパ値 123,456');
+    expect(text).toContain('写真判定');
+    expect(text).toContain('（ドパ値MVP）');
   });
 });
 

@@ -75,21 +75,51 @@ export function formatGap(gap: number): string {
   return `${gap.toFixed(3)}秒差`;
 }
 
-/** 投稿文。上位 3 人と、ドパ値・コース名・写真判定・タグ・URL。 */
-export function shareText(model: ShareModel): string {
+/** X の投稿の上限（全角 1 字を 2 と数えた重み）と、URL 1 つぶんの重み。 */
+const POST_LIMIT = 280;
+const URL_WEIGHT = 23;
+
+/** X の数え方での投稿文の重み。全角は 2、半角は 1、URL は長さによらず一定。 */
+export function postWeight(text: string): number {
+  return [...text.replace(SHARE_URL, '')].reduce(
+    (sum, ch) => sum + (ch.charCodeAt(0) > 0x7f ? 2 : 1),
+    URL_WEIGHT,
+  );
+}
+
+/** 上限に収めるために削る段階。上から順に試す。 */
+const TRIMS = [
+  { course: true, score: true, title: true, nameMax: TEXT_NAME_MAX },
+  { course: false, score: true, title: true, nameMax: TEXT_NAME_MAX },
+  { course: false, score: false, title: true, nameMax: TEXT_NAME_MAX },
+  { course: false, score: false, title: false, nameMax: TEXT_NAME_MAX },
+  { course: false, score: false, title: false, nameMax: 6 },
+] as const;
+
+function composeText(model: ShareModel, trim: (typeof TRIMS)[number]): string {
   const lines = ['ドパ抽で発表順が決まった！'];
   model.rows.slice(0, MEDALS.length).forEach((row, i) => {
-    const title = i === 0 && row.title ? `（${row.title}）` : '';
-    lines.push(`${MEDALS[i]} ${clip(row.name, TEXT_NAME_MAX)}${title}`);
+    const title = trim.title && i === 0 && row.title ? `（${row.title}）` : '';
+    lines.push(`${MEDALS[i]} ${clip(row.name, trim.nameMax)}${title}`);
   });
   const facts: string[] = [];
-  if (model.score > 0) facts.push(`ドパ値 ${formatScore(model.score)}`);
-  if (model.courseName) facts.push(`コース: ${model.courseName}`);
+  if (trim.score && model.score > 0) facts.push(`ドパ値 ${formatScore(model.score)}`);
+  if (trim.course && model.courseName) facts.push(`コース: ${model.courseName}`);
   if (facts.length > 0) lines.push(facts.join(' / '));
   if (model.photoGap !== null) lines.push(`📸 写真判定 ${formatGap(model.photoGap)}`);
   if (model.rare) lines.push(`🌈 ${model.rare}`);
   lines.push(SHARE_TAG, SHARE_URL);
   return lines.join('\n');
+}
+
+/**
+ * 投稿文。上位 3 人と、ドパ値・コース名・写真判定・激レア回・タグ・URL。
+ * X の上限を超えるときは、コース名 → ドパ値 → 称号 → 名前の長さ、の順に削る
+ * （上位 3 人・写真判定・激レア回・タグ・URL は残す）。
+ */
+export function shareText(model: ShareModel): string {
+  const texts = TRIMS.map((trim) => composeText(model, trim));
+  return texts.find((text) => postWeight(text) <= POST_LIMIT) ?? texts.at(-1)!;
 }
 
 /** X の投稿画面を、投稿文を入れた状態で開く URL。画像は付けられない。 */
