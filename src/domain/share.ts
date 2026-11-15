@@ -79,12 +79,28 @@ export function formatGap(gap: number): string {
 const POST_LIMIT = 280;
 const URL_WEIGHT = 23;
 
-/** X の数え方での投稿文の重み。全角は 2、半角は 1、URL は長さによらず一定。 */
+/**
+ * URL として扱われそうな並び（https://… や a.com のようなドメイン）。
+ * X は投稿文中の URL を、プロトコルが無くても拾い、長さによらず一定の重みで数える。
+ */
+const URL_LIKE = /(?:https?:\/\/)?[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}(?:\/[^\s]*)?/gi;
+
+const plainWeight = (text: string) =>
+  [...text].reduce((sum, ch) => sum + (ch.charCodeAt(0) > 0x7f ? 2 : 1), 0);
+
+/**
+ * X の数え方での投稿文の重み。全角は 2、半角は 1、URL は 1 つにつき一定。
+ * 名前が URL の形をしていることもあるので、公開先の URL に限らず数える。
+ */
 export function postWeight(text: string): number {
-  return [...text.replace(SHARE_URL, '')].reduce(
-    (sum, ch) => sum + (ch.charCodeAt(0) > 0x7f ? 2 : 1),
-    URL_WEIGHT,
-  );
+  let weight = 0;
+  let last = 0;
+  for (const match of text.matchAll(URL_LIKE)) {
+    weight += plainWeight(text.slice(last, match.index));
+    weight += URL_WEIGHT;
+    last = match.index + match[0].length;
+  }
+  return weight + plainWeight(text.slice(last));
 }
 
 /** 上限に収めるために削る段階。上から順に試す。 */
