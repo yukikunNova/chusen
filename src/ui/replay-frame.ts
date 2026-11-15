@@ -56,6 +56,8 @@ export function drawReplayFrame(
   source: HTMLCanvasElement,
   telop: ReplayTelop,
   courseName: string | null,
+  /** 激レア回の呼び名。通常回は null。 */
+  rare: string | null = null,
 ) {
   const crop = coverRect(source.width, source.height, REPLAY_WIDTH, REPLAY_HEIGHT);
   ctx.drawImage(source, crop.x, crop.y, crop.width, crop.height, 0, 0, REPLAY_WIDTH, REPLAY_HEIGHT);
@@ -68,6 +70,9 @@ export function drawReplayFrame(
     const tagWidth = ctx.measureText(SHARE_TAG).width;
     outlined(ctx, 24, courseName, 32 + tagWidth + 20, REPLAY_HEIGHT - 34, '#d8d4ff', 600);
   }
+
+  // 左上: 激レア回の刻印
+  if (rare) outlined(ctx, 34, `🌈 激レア回 ${rare}`, 32, 56, GOLD, 700);
 
   ctx.textAlign = 'center';
   const centerX = REPLAY_WIDTH / 2;

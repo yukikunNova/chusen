@@ -736,6 +736,21 @@ button:disabled {
   filter: drop-shadow(0 0 0.15em #fff);
 }
 
+/* 激レア回の札（左下に出し続ける） */
+.hud-rare {
+  position: absolute;
+  left: 1.6vw;
+  bottom: 2vh;
+  padding: 0.25em 0.8em;
+  border: 0.1em solid var(--gold);
+  border-radius: 999px;
+  background: rgb(11 6 32 / 78%);
+  font-size: max(2.8vh, 14px);
+  font-weight: 900;
+  color: var(--gold);
+  text-shadow: 0 0 0.4em rgb(255 159 28 / 90%);
+}
+
 .hud-photo {
   position: absolute;
   top: 12vh;

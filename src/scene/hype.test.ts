@@ -9,6 +9,7 @@ import {
   buildHighlights,
   buildOvertakes,
   isFever,
+  isFeverLook,
   photoState,
   type Box,
 } from './hype';
@@ -192,5 +193,21 @@ describe('photoState', () => {
     expect(photoState(photo, second)).toEqual({ gap: 0.004 });
     expect(photoState(photo, second + 1.9)).toEqual({ gap: 0.004 });
     expect(photoState(photo, second + 2)).toBeNull();
+  });
+});
+
+describe('isFeverLook', () => {
+  it('通常回はフィーバータイムと同じ', () => {
+    for (const t of [0, 3, 10, 18.9, 19, 22.9, 23, 26]) {
+      expect(isFeverLook(t, null)).toBe(isFever(t));
+      expect(isFeverLook(t, 'gold')).toBe(isFever(t));
+    }
+  });
+  it('全編フィーバーの回は、スタートから 1 着ゴールまでずっとフィーバーの見た目', () => {
+    expect(isFeverLook(2.9, 'fever')).toBe(false);
+    expect(isFeverLook(3, 'fever')).toBe(true);
+    expect(isFeverLook(10, 'fever')).toBe(true);
+    expect(isFeverLook(22.9, 'fever')).toBe(true);
+    expect(isFeverLook(TIMELINE.finishStart, 'fever')).toBe(false);
   });
 });

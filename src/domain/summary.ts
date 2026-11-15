@@ -1,3 +1,5 @@
+import type { RareKind } from './rare';
+
 /** レースのまとめ。結果画面と結果カード画像に出す。すべて飾りで、順位には関係しない。 */
 export type RaceSummary = {
   /** コース名。簡易表示（3D なし）のときは null。 */
@@ -8,4 +10,6 @@ export type RaceSummary = {
   titles: (string | null)[];
   /** 写真判定の回の着差（秒）。写真判定でなければ null。 */
   photoGap: number | null;
+  /** 激レア回の種類。通常回は null。 */
+  rare: RareKind | null;
 };

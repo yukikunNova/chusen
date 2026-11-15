@@ -90,6 +90,7 @@ describe('mountResultView', () => {
       score: 12345,
       titles: ['ドパ値MVP', null],
       photoGap: null,
+      rare: null,
     };
     mountResultView(root, names(2), summary, handlers(), false);
     const items = all(root, 'result-item');
@@ -100,7 +101,13 @@ describe('mountResultView', () => {
   });
   it('コース名・ドパ値・写真判定の着差を出す。まとめが無ければ出さない', () => {
     const root = document.createElement('div');
-    const summary = { courseName: 'ネオン峠', score: 12345, titles: [null, null], photoGap: 0.003 };
+    const summary = {
+      courseName: 'ネオン峠',
+      score: 12345,
+      titles: [null, null],
+      photoGap: 0.003,
+      rare: null,
+    };
     mountResultView(root, names(2), summary, handlers(), false);
     const info = one(root, 'result-info').textContent!;
     expect(info).toContain('ネオン峠');
@@ -184,5 +191,19 @@ describe('mountResultView', () => {
     view.setVideo('none');
     expect(button.hidden).toBe(true);
     expect(one(root, 'video-note').textContent).toBe('');
+  });
+  it('激レア回は、まとめの行に呼び名と出現率を出す', () => {
+    const root = document.createElement('div');
+    const summary = {
+      courseName: 'ネオン峠',
+      score: 1,
+      titles: [null, null],
+      photoGap: null,
+      rare: 'fever' as const,
+    };
+    mountResultView(root, names(2), summary, handlers(), false);
+    expect(one(root, 'result-info').textContent).toContain(
+      '激レア回「全編フィーバー」（出現率1%）',
+    );
   });
 });

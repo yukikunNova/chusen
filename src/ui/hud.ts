@@ -26,6 +26,8 @@ export type Hud = {
   popScore(x: number, y: number, text: string): void;
   setRoulette(state: RouletteState | null): void;
   setFever(on: boolean): void;
+  /** 激レア回の札（呼び名）。null で消す。 */
+  setRare(label: string | null): void;
   /** 写真判定の表示。gap が null のあいだは判定中、数字が入ったら着差（秒）。null で消す。 */
   setPhoto(state: { gap: number | null } | null): void;
   /** 画面全体を一瞬光らせる。続けて呼んでも、間隔が短いぶんは光らせない。 */
@@ -50,11 +52,12 @@ export function mountHud(root: HTMLElement, handlers: HudHandlers, muted: boolea
   const score = el('div', { class: 'hud-score', testid: 'score', hidden: true });
   const roulette = el('div', { class: 'hud-roulette', testid: 'roulette', hidden: true });
   const photo = el('div', { class: 'hud-photo', testid: 'photo', hidden: true });
+  const rare = el('div', { class: 'hud-rare', testid: 'rare', hidden: true });
   const flash = el('div', { class: 'hud-flash', testid: 'flash' });
   const lines = el('div', { class: 'hud-lines' });
   const pops = el('div', { class: 'hud-pops' });
   // 途中経過の飾り。読み上げの対象にしない
-  for (const item of [banner, combo, score, roulette, photo, flash, lines, pops]) {
+  for (const item of [banner, combo, score, roulette, photo, rare, flash, lines, pops]) {
     item.setAttribute('aria-hidden', 'true');
   }
   const ranking = el('ol', { class: 'hud-ranking', testid: 'ranking' });
@@ -76,6 +79,7 @@ export function mountHud(root: HTMLElement, handlers: HudHandlers, muted: boolea
     roulette,
     banner,
     photo,
+    rare,
     countdown,
     courseName,
     ranking,
@@ -227,6 +231,10 @@ export function mountHud(root: HTMLElement, handlers: HudHandlers, muted: boolea
             ]),
       );
       replay(roulette, 'pop');
+    },
+    setRare(label) {
+      rare.hidden = label === null;
+      rare.textContent = label === null ? '' : `🌈 激レア回 ${label}`;
     },
     setFever(on) {
       container.classList.toggle('fever', on);

@@ -163,4 +163,16 @@ describe('mountHud', () => {
     hud.destroy();
     expect(root.children).toHaveLength(0);
   });
+  it('激レア回の札を出し、null で消す', () => {
+    const root = document.createElement('div');
+    const hud = mountHud(root, { onSkip: vi.fn(), onToggleMute: vi.fn() }, false);
+    const badge = root.querySelector<HTMLElement>('[data-testid="rare"]')!;
+    expect(badge.hidden).toBe(true);
+    hud.setRare('黄金レース');
+    expect(badge.hidden).toBe(false);
+    expect(badge.textContent).toContain('激レア回');
+    expect(badge.textContent).toContain('黄金レース');
+    hud.setRare(null);
+    expect(badge.hidden).toBe(true);
+  });
 });

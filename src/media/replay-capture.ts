@@ -21,6 +21,8 @@ export function beginCapture(
   source: HTMLCanvasElement,
   audio: MediaStream | null,
   courseName: string | null,
+  /** 激レア回の呼び名。通常回は null。 */
+  rare: string | null,
 ): ReplayCapture | null {
   try {
     if (typeof MediaRecorder === 'undefined') return null;
@@ -63,7 +65,7 @@ export function beginCapture(
         // 画面の更新が速い環境でも、写すのは動画のコマ数まで
         if (!due(performance.now())) return;
         try {
-          drawReplayFrame(ctx, source, telop, courseName);
+          drawReplayFrame(ctx, source, telop, courseName, rare);
         } catch {
           // 1 コマ写せなくても録画は続ける
         }

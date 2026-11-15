@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   SHARE_MAX_ROWS,
+  SHARE_TAG,
   SHARE_URL,
   buildShareModel,
   hiddenNames,
   postUrl,
+  postWeight,
   shareText,
 } from './share';
 import type { RaceSummary } from './summary';
@@ -17,6 +19,7 @@ const summary = (n: number, over: Partial<RaceSummary> = {}): RaceSummary => ({
     i === 0 ? 'ドパ値MVP' : i === n - 1 ? '大トリ' : null,
   ),
   photoGap: null,
+  rare: null,
   ...over,
 });
 
@@ -103,11 +106,93 @@ describe('shareText', () => {
   });
 });
 
+describe('投稿文の長さ（激レア回・写真判定つき）', () => {
+  // 全角は 2、半角は 1、URL は 23 として数える
+  const weight = (text: string) =>
+    [...text.replace(SHARE_URL, '')].reduce(
+      (sum, ch) => sum + (ch.charCodeAt(0) > 0x7f ? 2 : 1),
+      23,
+    );
+  const long = Array.from({ length: 5 }, (_, i) => `とても長い名前の参加者さん${i}`.repeat(3));
+
+  it('激レア回と写真判定が重なっても上限に収まり、激レアの行・タグ・URL は残す', () => {
+    for (const rare of ['gold', 'meteor', 'fever'] as const) {
+      const text = shareText(
+        buildShareModel(
+          long,
+          summary(5, {
+            rare,
+            photoGap: 0.001,
+            score: 1234567,
+            courseName: 'オーロラきりもみサーキット',
+          }),
+          false,
+        ),
+      );
+      expect(weight(text)).toBeLessThanOrEqual(280);
+      expect(text).toContain('激レア回');
+      expect(text).toContain('🥇');
+      expect(text).toContain(SHARE_TAG);
+      expect(text).toContain(SHARE_URL);
+    }
+  });
+  it('名前が URL の形（a.com など）でも上限に収まる。X は URL を 1 つ 23 と数える', () => {
+    const text = shareText(
+      buildShareModel(
+        ['a.com', 'b.com', 'c.com'],
+        summary(3, {
+          rare: 'gold',
+          photoGap: 0.001,
+          score: 1234567,
+          courseName: 'オーロラきりもみサーキット特別編その2',
+          titles: ['金だらい被害者', null, null],
+        }),
+        false,
+      ),
+    );
+    // 実装の数え方に頼らず、名前の URL を 23 字ぶんの半角に置き換えてから数える
+    const expanded = text.replace(/\b[abc]\.com\b/g, 'x'.repeat(23));
+    expect(expanded).not.toBe(text);
+    expect(weight(expanded)).toBeLessThanOrEqual(280);
+    expect(text).toContain('激レア回');
+    expect(text).toContain('🥇 a.com');
+  });
+  it('URL の形の並びは、長さによらず 1 つ 23 として数える', () => {
+    expect(postWeight('abc あ')).toBe(3 + 1 + 2);
+    expect(postWeight('a.com')).toBe(23);
+    expect(postWeight('https://example.com/x あ')).toBe(23 + 1 + 2);
+    expect(postWeight(`#ドパ抽\n${SHARE_URL}`)).toBe(1 + 6 + 1 + 23);
+  });
+  it('収まるときは何も削らない', () => {
+    const text = shareText(
+      buildShareModel(['あ', 'い', 'う'], summary(3, { rare: 'gold', photoGap: 0.001 }), false),
+    );
+    expect(text).toContain('コース: ネオン峠');
+    expect(text).toContain('ドパ値 123,456');
+    expect(text).toContain('写真判定');
+    expect(text).toContain('（ドパ値MVP）');
+  });
+});
+
 describe('postUrl', () => {
   it('X の投稿画面を、投稿文を入れた状態で開く URL', () => {
     const url = new URL(postUrl('こんにちは #ドパ抽\nhttps://example.com/'));
     expect(url.origin).toBe('https://x.com');
     expect(url.pathname).toBe('/intent/post');
     expect(url.searchParams.get('text')).toBe('こんにちは #ドパ抽\nhttps://example.com/');
+  });
+});
+
+describe('激レア回の共有', () => {
+  it('激レア回は、画像の中身と投稿文に呼び名と出現率を入れる', () => {
+    const model = buildShareModel(names(3), summary(3, { rare: 'gold' }), false);
+    expect(model.rare).toBe('激レア回「黄金レース」（出現率1%）');
+    expect(shareText(model)).toContain('🌈 激レア回「黄金レース」（出現率1%）');
+  });
+  it('通常回には入れない', () => {
+    const model = buildShareModel(names(3), summary(3), false);
+    expect(model.rare).toBeNull();
+    expect(shareText(model)).not.toContain('激レア');
+    expect(buildShareModel(names(3), null, false).rare).toBeNull();
   });
 });

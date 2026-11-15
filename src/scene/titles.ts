@@ -1,3 +1,4 @@
+import type { RareKind } from '../domain/rare';
 import type { RaceEventKind, RaceScript } from '../domain/race-script';
 import type { RaceSummary } from '../domain/summary';
 import { buildHighlights } from './hype';
@@ -53,11 +54,16 @@ export function buildTitles(script: RaceScript): (string | null)[] {
 }
 
 /** レースのまとめ（結果画面・結果カード用）。 */
-export function buildSummary(script: RaceScript, courseName: string | null): RaceSummary {
+export function buildSummary(
+  script: RaceScript,
+  courseName: string | null,
+  rare: RareKind | null = null,
+): RaceSummary {
   return {
     courseName,
     score: buildHighlights(script).at(-1)?.total ?? 0,
     titles: buildTitles(script),
     photoGap: script.photo?.gap ?? null,
+    rare,
   };
 }

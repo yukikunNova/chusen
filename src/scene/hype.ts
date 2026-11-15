@@ -1,4 +1,5 @@
 import { ITEM_NAMES } from '../domain/commentary';
+import type { RareKind } from '../domain/rare';
 import {
   SURGE_DURATION,
   TIMELINE,
@@ -134,6 +135,12 @@ export const FEVER_FROM = TIMELINE.finalCornerStart;
 /** フィーバータイム中か。最終コーナーから 1 着ゴールまで。 */
 export function isFever(t: number): boolean {
   return t >= FEVER_FROM && t < TIMELINE.finishStart;
+}
+
+/** フィーバーの見た目（虹色・集中線）にするか。全編フィーバーの回は、スタートから 1 着ゴールまで。点数には関係しない。 */
+export function isFeverLook(t: number, rare: RareKind | null): boolean {
+  if (rare === 'fever') return t >= TIMELINE.countdownEnd && t < TIMELINE.finishStart;
+  return isFever(t);
 }
 
 export type HighlightKind = 'overtake' | 'boost' | 'hit' | 'jackpot';
