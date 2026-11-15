@@ -14,6 +14,8 @@ export type Stage = {
   reducedMotion: boolean;
   /** 毎フレーム呼ばれる。dt は秒（最大 0.1）。戻り値で解除。 */
   onFrame(cb: (dt: number) => void): () => void;
+  /** 画面を描き終えた直後に毎フレーム呼ばれる（描いた絵を写し取る用）。戻り値で解除。 */
+  onAfterRender(cb: () => void): () => void;
   dispose(): void;
 };
 
@@ -65,6 +67,7 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
   window.addEventListener('resize', resize);
 
   const callbacks = new Set<(dt: number) => void>();
+  const afterRender = new Set<() => void>();
   let last = performance.now();
   let frame = requestAnimationFrame(function loop(now) {
     const dt = Math.min(MAX_DT, (now - last) / 1000);
@@ -76,6 +79,7 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
     renderer.clearDepth();
     renderer.render(overlay, camera);
     renderer.autoClear = true;
+    for (const cb of [...afterRender]) cb();
     frame = requestAnimationFrame(loop);
   });
 
@@ -89,10 +93,15 @@ export function createStage(canvas: HTMLCanvasElement): Stage {
       callbacks.add(cb);
       return () => void callbacks.delete(cb);
     },
+    onAfterRender(cb) {
+      afterRender.add(cb);
+      return () => void afterRender.delete(cb);
+    },
     dispose() {
       cancelAnimationFrame(frame);
       window.removeEventListener('resize', resize);
       callbacks.clear();
+      afterRender.clear();
       composer.dispose();
       renderer.dispose();
     },

@@ -1,6 +1,7 @@
 import { formatResult } from './domain/result-text';
 import { buildShareModel, postUrl, shareText, type ShareModel } from './domain/share';
 import type { RaceSummary } from './domain/summary';
+import type { ReplayVideo } from './media/replay-recorder';
 import {
   activeMembers,
   currentGroup,
@@ -25,10 +26,11 @@ export type Screen = 'roster' | 'race' | 'result';
 /**
  * 確定済みの順位を演出として再生する。終わったら onDone を呼ぶ。
  * summary はレースのまとめ（称号など）で、結果画面の飾りに使う。
+ * replay はゴール前のリプレイ動画。録っていない回は渡さない。録れなかった回は null になる。
  */
 export type RaceRunner = (
   order: Member[],
-  onDone: (summary?: RaceSummary) => void,
+  onDone: (summary?: RaceSummary, replay?: Promise<ReplayVideo | null>) => void,
 ) => { skip(): void };
 
 /** 共有する結果画像。dataUrl は見本の表示用。 */
@@ -36,7 +38,8 @@ export type CardImage = { blob: Blob; dataUrl: string };
 export type ShareDeps = {
   /** 結果画像を描く。描けない環境では null。 */
   renderCard(model: ShareModel): Promise<CardImage | null>;
-  saveImage(blob: Blob, filename: string): void;
+  /** ファイルとして保存する（画像・動画）。 */
+  saveFile(blob: Blob, filename: string): void;
   copyImage(blob: Blob): Promise<boolean>;
   /** 投稿画面を新しいタブで開く。開けなかった（ブロックされた）ら false。 */
   openPost(url: string): boolean;
@@ -73,6 +76,7 @@ export type App = {
 
 export const EXPORT_FILENAME = 'chusen-roster.json';
 export const CARD_FILENAME = 'dopachu-result.png';
+export const REPLAY_FILENAME = 'dopachu-replay';
 const MSG_CARD_FAILED = '画像を作れませんでした。「結果をコピー」を使ってください';
 const MSG_IMAGE_COPIED = '画像をコピーしました';
 const MSG_IMAGE_COPY_FAILED = 'コピーできませんでした。「画像を保存」を使ってください';
@@ -80,6 +84,9 @@ const MSG_POST_PASTE = '画像をコピーしました。投稿画面で貼り�
 const MSG_POST_BLOCKED =
   '投稿画面を開けませんでした。ポップアップを許可してから、もう一度押してください';
 const MSG_POST_ATTACH = '投稿画面を開きました。「画像を保存」した画像を投稿に添付してください';
+const MSG_VIDEO_HIDDEN = '動画には名札が映るため、名前を伏せている間は保存できません';
+const MSG_VIDEO_WEBM = 'このブラウザでは WebM 形式の動画になります（X には投稿できない形式です）';
+const MSG_VIDEO_SAVED = '動画を保存しました。X の投稿画面で添付してください';
 const MSG_BROKEN = '保存データが壊れていたため初期化しました';
 const MSG_UNSAVABLE = 'このブラウザでは名簿を保存できません（閉じると消えます）';
 const MSG_IMPORT_FAILED = '読み込めないファイルです。名簿は変更していません';
@@ -153,7 +160,11 @@ export function createApp(deps: AppDeps): App {
     renderRoster();
   }
 
-  function showResult(order: readonly Member[], summary: RaceSummary | null) {
+  function showResult(
+    order: readonly Member[],
+    summary: RaceSummary | null,
+    replay: Promise<ReplayVideo | null> | null,
+  ) {
     const names = order.map((m) => m.name);
     const text = formatResult(names);
     let hidden = false;
@@ -176,6 +187,15 @@ export function createApp(deps: AppDeps): App {
           if (!image) view.setShareNote(MSG_CARD_FAILED);
         });
     }
+    /** リプレイ動画。準備中は 'pending'、無い回は null。 */
+    let video: ReplayVideo | 'pending' | null = replay ? 'pending' : null;
+    function showVideo(saved = false) {
+      if (video === null) view.setVideo('none');
+      else if (video === 'pending') view.setVideo('pending');
+      else if (hidden) view.setVideo('blocked', MSG_VIDEO_HIDDEN);
+      else if (video.format === 'webm') view.setVideo('ready', MSG_VIDEO_WEBM);
+      else view.setVideo('ready', saved ? MSG_VIDEO_SAVED : '');
+    }
     const view = mountResultView(
       deps.root,
       names,
@@ -194,9 +214,15 @@ export function createApp(deps: AppDeps): App {
           hidden = value;
           view.setShareNote('');
           refreshCard();
+          showVideo();
+        },
+        onSaveVideo: () => {
+          if (video === null || video === 'pending' || hidden) return;
+          deps.share.saveFile(video.blob, `${REPLAY_FILENAME}.${video.format}`);
+          showVideo(true);
         },
         onSaveImage: () => {
-          if (card) deps.share.saveImage(card.blob, CARD_FILENAME);
+          if (card) deps.share.saveFile(card.blob, CARD_FILENAME);
         },
         onCopyImage: () => {
           if (!card) return;
@@ -220,6 +246,15 @@ export function createApp(deps: AppDeps): App {
     );
     resultView = view;
     refreshCard();
+    showVideo();
+    void replay
+      ?.catch(() => null)
+      .then((made) => {
+        // 画面を離れたあとにできた動画は捨てる
+        if (resultView !== view) return;
+        video = made;
+        showVideo();
+      });
   }
 
   function beginRace() {
@@ -227,10 +262,10 @@ export function createApp(deps: AppDeps): App {
     const token = ++raceToken;
     race = null;
     setScreen('race');
-    const handle = deps.runRace(order, (summary) => {
+    const handle = deps.runRace(order, (summary, replay) => {
       if (token !== raceToken || screen !== 'race') return;
       race = null;
-      showResult(order, summary ?? null);
+      showResult(order, summary ?? null, replay ?? null);
       setScreen('result');
     });
     if (token === raceToken && screen === 'race') race = handle;

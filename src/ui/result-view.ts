@@ -12,7 +12,10 @@ export type ResultViewHandlers = {
   onSaveImage(): void;
   onCopyImage(): void;
   onPost(): void;
+  onSaveVideo(): void;
 };
+/** リプレイ動画のボタンの状態。none: 動画なし／pending: 準備中／ready: 保存できる／blocked: 今は保存できない。 */
+export type VideoState = 'none' | 'pending' | 'ready' | 'blocked';
 export type ResultView = {
   showCopyFallback(text: string): void;
   setCopied(): void;
@@ -21,6 +24,8 @@ export type ResultView = {
   setCard(dataUrl: string | null): void;
   /** 共有の案内文（コピーできた、など）。 */
   setShareNote(text: string): void;
+  /** リプレイ動画のボタンと、その案内文。 */
+  setVideo(state: VideoState, note?: string): void;
   destroy(): void;
 };
 
@@ -115,6 +120,15 @@ export function mountResultView(
     text: 'X に投稿',
     type: 'button',
   });
+  const saveVideo = el('button', {
+    class: 'btn small',
+    testid: 'save-video',
+    text: '動画を保存',
+    type: 'button',
+    hidden: true,
+  });
+  const videoNote = el('p', { class: 'share-note', testid: 'video-note' });
+  videoNote.setAttribute('role', 'status');
   const shareButtons = [saveImage, copyImage, post];
   for (const button of shareButtons) button.disabled = true;
   const note = el('p', { class: 'share-note', testid: 'share-note' });
@@ -126,8 +140,9 @@ export function mountResultView(
         hide,
         el('span', { text: '共有では名前を伏せる（Aさん・Bさん…）' }),
       ]),
-      el('div', { class: 'share-buttons' }, shareButtons),
+      el('div', { class: 'share-buttons' }, [...shareButtons, saveVideo]),
       note,
+      videoNote,
     ]),
   ]);
 
@@ -135,6 +150,7 @@ export function mountResultView(
   saveImage.addEventListener('click', () => handlers.onSaveImage());
   copyImage.addEventListener('click', () => handlers.onCopyImage());
   post.addEventListener('click', () => handlers.onPost());
+  saveVideo.addEventListener('click', () => handlers.onSaveVideo());
   copy.addEventListener('click', () => handlers.onCopy());
   redraw.addEventListener('click', () => handlers.onRedraw());
   back.addEventListener('click', () => handlers.onBack());
@@ -172,6 +188,12 @@ export function mountResultView(
     },
     setShareNote(text) {
       note.textContent = text;
+    },
+    setVideo(state, text = '') {
+      saveVideo.hidden = state === 'none';
+      saveVideo.disabled = state !== 'ready';
+      saveVideo.textContent = state === 'pending' ? '動画を準備中…' : '動画を保存';
+      videoNote.textContent = state === 'none' ? '' : text;
     },
     destroy() {
       container.remove();

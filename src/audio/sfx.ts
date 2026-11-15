@@ -27,6 +27,11 @@ export type Sfx = {
   /** 予約済みのものを含め、鳴っている単発音をすべて切る（スキップ時）。BGM は止めない。 */
   cutEffects(): void;
   setMuted(muted: boolean): void;
+  /**
+   * 鳴っている音をそのまま録るための出口（リプレイ動画用）。unlock 前・作れない環境では null。
+   * 全体音量の後ろから取るので、ミュート中は無音になる。
+   */
+  recordingStream(): MediaStream | null;
 };
 
 /** 全体音量。派手に鳴らすぶん、音割れはコンプレッサーで抑える。 */
@@ -364,6 +369,8 @@ export function createSfx(createContext: () => AudioContext, muted: boolean): Sf
     return bus;
   }
 
+  let recording: MediaStreamAudioDestinationNode | null = null;
+
   return {
     unlock() {
       if (failed) return;
@@ -383,6 +390,7 @@ export function createSfx(createContext: () => AudioContext, muted: boolean): Sf
         master = null;
         input = null;
         effects = null;
+        recording = null;
       }
     },
     play(kind, level = 0) {
@@ -432,6 +440,18 @@ export function createSfx(createContext: () => AudioContext, muted: boolean): Sf
       // 鳴り始めた単発音もすぐ消えるよう、出口の音量で切る
       if (master) master.gain.value = muted ? 0 : MASTER_VOLUME;
       if (muted) stopBgm();
+    },
+    recordingStream() {
+      if (!ctx || !master || !ctx.createMediaStreamDestination) return null;
+      try {
+        if (!recording) {
+          recording = ctx.createMediaStreamDestination();
+          master.connect(recording);
+        }
+        return recording.stream;
+      } catch {
+        return null;
+      }
     },
   };
 }
